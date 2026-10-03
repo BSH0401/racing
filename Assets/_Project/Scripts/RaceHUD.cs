@@ -12,7 +12,7 @@ namespace Racing
         Font font;
         Text posText, lapText, timeText, bestText, speedText, boardText, centerText, flashText, wrongWayText;
         GameObject hudRoot, menuPanel, pausePanel, resultPanel;
-        Text menuLaps, resultTitle, resultBody;
+        Text menuLaps, menuTheme, resultTitle, resultBody;
         float flashTimer;
 
         void Awake()
@@ -57,12 +57,14 @@ namespace Racing
             title.fontStyle = FontStyle.BoldAndItalic;
             title.color = new Color(1f, 0.82f, 0.15f);
             Label(m, 36, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, 140f), new Vector2(1600f, 50f)).text = "6-car circuit race";
-            menuLaps = Label(m, 54, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, 20f), new Vector2(1000f, 80f));
-            var start = Label(m, 44, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, -80f), new Vector2(1400f, 60f));
+            menuLaps = Label(m, 50, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, 50f), new Vector2(1000f, 70f));
+            menuTheme = Label(m, 50, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, -15f), new Vector2(1000f, 70f));
+            var start = Label(m, 44, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, -100f), new Vector2(1400f, 60f));
             start.text = "Press ENTER  (gamepad A / Start)  to race";
             start.color = new Color(0.6f, 1f, 0.6f);
-            var controls = Label(m, 28, TextAnchor.UpperCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, -170f), new Vector2(1600f, 260f));
+            var controls = Label(m, 28, TextAnchor.UpperCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, -290f), new Vector2(1600f, 260f));
             controls.text =
+                "Menu: Up / Down select, Left / Right change, T toggle day / night\n" +
                 "W / Up  accelerate      S / Down  brake & reverse      A D / Left Right  steer\n" +
                 "SPACE  handbrake      R  reset car      C  camera      ESC  pause\n" +
                 "Gamepad: RT / LT throttle & brake, left stick steer, A handbrake, Y reset";
@@ -104,8 +106,11 @@ namespace Racing
             hudRoot.SetActive(state != RaceState.Menu);
 
             if (state == RaceState.Menu)
-                menuLaps.text = $"LAPS   <   {race.laps}   >";
-            menuLaps.supportRichText = false;
+            {
+                string theme = race.theme && race.theme.Current == RaceTheme.Night ? "NIGHT" : "DAY";
+                menuLaps.text = MenuRow("LAPS", race.laps.ToString(), race.MenuRow == 0);
+                menuTheme.text = MenuRow("TIME", theme, race.MenuRow == 1);
+            }
 
             centerText.text = state == RaceState.Countdown ? Mathf.CeilToInt(race.Countdown).ToString() : "";
 
@@ -149,6 +154,12 @@ namespace Racing
                 }
                 resultBody.text = rb.ToString();
             }
+        }
+
+        static string MenuRow(string label, string value, bool selected)
+        {
+            string row = $"{label}   <   {value}   >";
+            return selected ? $"<color=#ffd23a>►  {row}  ◄</color>" : $"<color=#bbbbbb>{row}</color>";
         }
 
         static string Ordinal(int n)

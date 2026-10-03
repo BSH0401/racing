@@ -25,6 +25,9 @@ namespace Racing
 
         const string RootName = "_Generated";
 
+        // World positions of the lamp heads (filled by Build), used for night lighting.
+        public readonly List<Vector3> LampLightPositions = new List<Vector3>();
+
         public float WallOffset => GetComponent<TrackPath>().roadHalfWidth + curbWidth + runoffWidth;
 
         void OnEnable() => Build();
@@ -165,6 +168,7 @@ namespace Racing
             var cube = PrimitiveMesh(PrimitiveType.Cube);
             var poles = new List<CombineInstance>();
             var heads = new List<CombineInstance>();
+            LampLightPositions.Clear();
             float off = WallOffset + barrierThickness + 1.2f;
             int step = Mathf.Max(1, Mathf.RoundToInt(36f / path.Spacing));
             for (int i = 0; i < path.Count; i += step)
@@ -176,6 +180,7 @@ namespace Racing
                 poles.Add(Inst(cyl, basePos + Vector3.up * 4f, Quaternion.identity, new Vector3(0.22f, 4f, 0.22f)));
                 poles.Add(Inst(cube, basePos + Vector3.up * 7.9f - r * 1.3f, face, new Vector3(0.14f, 0.14f, 2.6f)));
                 heads.Add(Inst(cube, basePos + Vector3.up * 7.75f - r * 2.5f, face, new Vector3(0.5f, 0.18f, 0.9f)));
+                LampLightPositions.Add(basePos + Vector3.up * 7.5f - r * 2.5f);
             }
             SetLayer(MeshObject("LampPoles", root, Combine(poles), false, lampPole));
             SetLayer(MeshObject("LampHeads", root, Combine(heads), false, lampHead));

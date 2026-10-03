@@ -7,6 +7,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 - 플레이어 1명 + AI 5명, 1~10랩 선택 (기본 3랩)
 - 아케이드 레이캐스트 서스펜션 차량 물리 (핸드브레이크 드리프트, 잔디 감속)
 - 순위/랩/랩타임/베스트랩 HUD, 미니맵, 역주행 경고, 카운트다운, 결과 화면
+- 낮/밤 테마: 밤에는 빌딩 창문 불빛, 가로등·차량 헤드라이트 실제 조명, 야간 하늘과 안개
 - 합성 엔진음 (5단 기어 피치)
 
 ## 조작
@@ -18,7 +19,9 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 | 차량 리셋 | R | Y |
 | 카메라 전환 | C | RB |
 | 일시정지 | ESC | Select |
-| 메뉴: 시작 / 랩 수 | Enter / ← → | Start·A / 방향패드 |
+| 메뉴: 시작 | Enter | Start·A |
+| 메뉴: 항목 선택 / 값 변경 (랩 수, 낮·밤) | ↑ ↓ / ← → | 방향패드 |
+| 메뉴: 낮·밤 바로 전환 | T | |
 
 ## 열기 / 빌드
 1. Unity Hub에서 이 폴더를 6000.3.11f1로 연다.
@@ -29,4 +32,4 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 트랙 모양은 `RacingSetup.StreetCorners`(도시 블록 꼭짓점, 코너는 자동으로 둥글게 처리)로 정해지며, 도로·방호벽·빌딩은 `TrackBuilder`가 실행 시 생성한다.
 
 ## 개발용 실행 옵션
-`-autostart -autopilot -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
+`-autostart -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`

@@ -72,7 +72,7 @@ namespace Racing.EditorTools
 
             var asphaltTex = NoiseTexture("Asphalt", 0.82f, 1f, 3);
             var concreteTex = NoiseTexture("Concrete", 0.85f, 1f, 9);
-            var windowTex = WindowTexture("Windows", 11);
+            var (windowTex, windowLit) = WindowTextures("Windows", 11);
 
             var road = Mat("Road", new Color(0.28f, 0.28f, 0.3f), 0.25f, 0f, asphaltTex);
             var curbRed = Mat("CurbRed", new Color(0.8f, 0.1f, 0.1f), 0.3f);
@@ -87,7 +87,8 @@ namespace Racing.EditorTools
             var stands = Mat("Stands", new Color(0.55f, 0.58f, 0.66f), 0.2f);
             var roofMat = Mat("Roof", new Color(0.3f, 0.3f, 0.32f), 0.1f, 0f, concreteTex);
             var lampPole = Mat("LampPole", new Color(0.25f, 0.27f, 0.3f), 0.5f, 0.6f);
-            var lampHead = Mat("LampHead", new Color(1f, 0.95f, 0.8f), 0.6f, 0f, null, new Color(1f, 0.9f, 0.7f) * 1.5f);
+            var lampHead = Mat("LampHead", new Color(1f, 0.95f, 0.8f), 0.6f);
+            EnableEmission(lampHead, null);
             var facades = new[]
             {
                 Mat("FacadeConcrete", new Color(0.78f, 0.77f, 0.74f), 0.3f, 0f, windowTex),
@@ -96,6 +97,9 @@ namespace Racing.EditorTools
                 Mat("FacadeSand", new Color(0.86f, 0.78f, 0.6f), 0.2f, 0f, windowTex),
                 Mat("FacadeSlate", new Color(0.42f, 0.46f, 0.52f), 0.5f, 0.2f, windowTex),
             };
+            foreach (var f in facades) EnableEmission(f, windowLit);
+            var skyDay = Skybox("SkyDay", new Color(0.5f, 0.5f, 0.5f), new Color(0.37f, 0.35f, 0.33f), 1.3f, 1f, 0.04f);
+            var skyNight = Skybox("SkyNight", new Color(0.18f, 0.22f, 0.45f), new Color(0.02f, 0.02f, 0.03f), 0.12f, 0.45f, 0.02f);
             var tire = Mat("Tire", new Color(0.08f, 0.08f, 0.08f), 0.2f);
             var glass = Mat("Glass", new Color(0.08f, 0.1f, 0.14f), 0.9f);
             var headlight = Mat("Headlight", new Color(1f, 0.95f, 0.75f), 0.8f, 0f, null, new Color(1f, 0.95f, 0.7f) * 2f);
@@ -130,7 +134,7 @@ namespace Racing.EditorTools
             sun.shadows = LightShadows.Soft;
             sun.transform.rotation = Quaternion.Euler(42f, -40f, 0f);
             RenderSettings.sun = sun;
-            RenderSettings.skybox = AssetDatabase.GetBuiltinExtraResource<Material>("Default-Skybox.mat");
+            RenderSettings.skybox = skyDay;
             RenderSettings.ambientMode = AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = new Color(0.62f, 0.7f, 0.82f);
             RenderSettings.ambientEquatorColor = new Color(0.5f, 0.55f, 0.55f);
@@ -219,6 +223,46 @@ namespace Racing.EditorTools
             rm.racers = racers;
             rm.chaseCamera = chase;
             rm.hud = hud;
+
+            var theme = rmGo.AddComponent<ThemeController>();
+            theme.sun = sun;
+            theme.track = builder;
+            theme.cars = racers;
+            theme.windowMaterials = facades;
+            theme.lampHeadMaterial = lampHead;
+            theme.day = new ThemeSettings
+            {
+                skybox = skyDay,
+                sunColor = sun.color,
+                sunIntensity = sun.intensity,
+                sunEuler = sun.transform.eulerAngles,
+                ambientSky = RenderSettings.ambientSkyColor,
+                ambientEquator = RenderSettings.ambientEquatorColor,
+                ambientGround = RenderSettings.ambientGroundColor,
+                fogColor = RenderSettings.fogColor,
+                fogStart = RenderSettings.fogStartDistance,
+                fogEnd = RenderSettings.fogEndDistance,
+                windowGlow = Color.black,
+                lampGlow = Color.black,
+                lightsOn = false,
+            };
+            theme.night = new ThemeSettings
+            {
+                skybox = skyNight,
+                sunColor = new Color(0.55f, 0.65f, 1f),
+                sunIntensity = 0.22f,
+                sunEuler = new Vector3(35f, 150f, 0f),
+                ambientSky = new Color(0.1f, 0.12f, 0.22f),
+                ambientEquator = new Color(0.08f, 0.08f, 0.12f),
+                ambientGround = new Color(0.04f, 0.04f, 0.05f),
+                fogColor = new Color(0.04f, 0.05f, 0.09f),
+                fogStart = 120f,
+                fogEnd = 800f,
+                windowGlow = new Color(1.6f, 1.5f, 1.3f),
+                lampGlow = new Color(1f, 0.85f, 0.6f) * 4f,
+                lightsOn = true,
+            };
+            rm.theme = theme;
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
@@ -380,33 +424,64 @@ namespace Racing.EditorTools
             return AssetDatabase.LoadAssetAtPath<Texture2D>(p);
         }
 
-        // Facade texture: 8x8 window cells (light frames, dark glass, some lit windows).
-        static Texture2D WindowTexture(string name, int seed)
+        // Facade textures: 8x8 window cells (light frames, dark glass, a few warm windows) plus a
+        // matching emission map where roughly 40% of windows are lit at night.
+        static (Texture2D day, Texture2D lit) WindowTextures(string name, int seed)
         {
-            string p = $"{TexDir}/{name}.png";
-            if (!File.Exists(p))
+            string p = $"{TexDir}/{name}.png", pl = $"{TexDir}/{name}Lit.png";
+            if (!File.Exists(p) || !File.Exists(pl))
             {
                 const int size = 256, cells = 8, cell = size / cells;
                 var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
+                var lit = new Texture2D(size, size, TextureFormat.RGB24, false);
                 var rng = new System.Random(seed);
+                var litRng = new System.Random(seed + 1);
                 for (int cy = 0; cy < cells; cy++)
                 for (int cx = 0; cx < cells; cx++)
                 {
                     float r = (float)rng.NextDouble();
+                    float lr = (float)litRng.NextDouble();
                     Color glass = r < 0.12f ? new Color(0.95f, 0.85f, 0.55f) : Color.Lerp(new Color(0.12f, 0.15f, 0.2f), new Color(0.32f, 0.38f, 0.46f), r);
+                    Color glow = r < 0.12f || lr < 0.32f ? Color.Lerp(new Color(1f, 0.78f, 0.45f), new Color(0.75f, 0.85f, 1f), lr) * (0.7f + 0.3f * lr) : Color.black;
                     for (int y = 0; y < cell; y++)
                     for (int x = 0; x < cell; x++)
                     {
                         bool frame = x < 5 || x >= cell - 5 || y < 7 || y >= cell - 4;
                         float n = 0.93f + (float)rng.NextDouble() * 0.07f;
                         tex.SetPixel(cx * cell + x, cy * cell + y, frame ? new Color(n, n, n) : glass);
+                        lit.SetPixel(cx * cell + x, cy * cell + y, frame ? Color.black : glow);
                     }
                 }
                 File.WriteAllBytes(p, tex.EncodeToPNG());
+                File.WriteAllBytes(pl, lit.EncodeToPNG());
                 Object.DestroyImmediate(tex);
+                Object.DestroyImmediate(lit);
                 AssetDatabase.ImportAsset(p);
+                AssetDatabase.ImportAsset(pl);
             }
-            return AssetDatabase.LoadAssetAtPath<Texture2D>(p);
+            return (AssetDatabase.LoadAssetAtPath<Texture2D>(p), AssetDatabase.LoadAssetAtPath<Texture2D>(pl));
+        }
+
+        static Material Skybox(string name, Color tint, Color groundColor, float exposure, float atmosphere, float sunSize)
+        {
+            var m = GetOrCreate(name, "Skybox/Procedural");
+            m.SetColor("_SkyTint", tint);
+            m.SetColor("_GroundColor", groundColor);
+            m.SetFloat("_Exposure", exposure);
+            m.SetFloat("_AtmosphereThickness", atmosphere);
+            m.SetFloat("_SunSize", sunSize);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        // Emission is driven at runtime by ThemeController; enable the keyword so the variant ships.
+        static void EnableEmission(Material m, Texture2D map)
+        {
+            m.EnableKeyword("_EMISSION");
+            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            if (map) m.SetTexture("_EmissionMap", map);
+            m.SetColor("_EmissionColor", Color.black);
+            EditorUtility.SetDirty(m);
         }
 
         [MenuItem("Racing/Build Windows")]

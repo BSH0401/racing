@@ -16,6 +16,7 @@ namespace Racing
         public Racer[] racers;
         public ChaseCamera chaseCamera;
         public RaceHUD hud;
+        public ThemeController theme;
         public int laps = 3;
 
         public RaceState State { get; private set; }
@@ -23,6 +24,7 @@ namespace Racing
         public float Countdown { get; private set; }
         public bool Paused { get; private set; }
         public Racer Player { get; private set; }
+        public int MenuRow { get; private set; }
         public readonly List<Racer> Standings = new List<Racer>();
 
         float baseTimeScale = 1f;
@@ -169,8 +171,16 @@ namespace Racing
                     if (confirm || (gp != null && gp.buttonSouth.wasPressedThisFrame)) BeginCountdown();
                     bool left = (kb != null && (kb.leftArrowKey.wasPressedThisFrame || kb.aKey.wasPressedThisFrame)) || (gp != null && gp.dpad.left.wasPressedThisFrame);
                     bool right = (kb != null && (kb.rightArrowKey.wasPressedThisFrame || kb.dKey.wasPressedThisFrame)) || (gp != null && gp.dpad.right.wasPressedThisFrame);
-                    if (left) laps = Mathf.Max(1, laps - 1);
-                    if (right) laps = Mathf.Min(10, laps + 1);
+                    bool up = (kb != null && (kb.upArrowKey.wasPressedThisFrame || kb.wKey.wasPressedThisFrame)) || (gp != null && gp.dpad.up.wasPressedThisFrame);
+                    bool down = (kb != null && (kb.downArrowKey.wasPressedThisFrame || kb.sKey.wasPressedThisFrame)) || (gp != null && gp.dpad.down.wasPressedThisFrame);
+                    if (up || down) MenuRow = 1 - MenuRow;
+                    if (MenuRow == 0)
+                    {
+                        if (left) laps = Mathf.Max(1, laps - 1);
+                        if (right) laps = Mathf.Min(10, laps + 1);
+                    }
+                    else if ((left || right) && theme) theme.Toggle();
+                    if (kb != null && kb.tKey.wasPressedThisFrame && theme) theme.Toggle();
                     if (back) Quit();
                     break;
 
