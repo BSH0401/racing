@@ -88,7 +88,7 @@ namespace Racing
                     // Stand on the sidewalk ahead of the car and watch it go by.
                     int idx = track.IndexAhead(subject.index, 45f + subject.car.ForwardSpeed * 1.5f);
                     float side = Random.value < 0.5f ? -1f : 1f;
-                    fixedPos = track.Point(idx) + track.Right(idx) * side * (track.roadHalfWidth + 6.5f) + Vector3.up * Random.Range(1.6f, 4f);
+                    fixedPos = track.Point(idx) + track.Right(idx) * side * (track.roadHalfWidth + 2.5f) + Vector3.up * Random.Range(1.6f, 4f);
                 }
                 orbitAngle = Random.Range(0f, 360f);
                 InstantCut();
@@ -117,11 +117,11 @@ namespace Racing
                     break;
                 case Shot.Orbit:
                 {
-                    var b = track.GetBounds();
+                    // Slow helicopter pass around the city centre.
                     orbitAngle += dt * 4f;
-                    float radius = Mathf.Max(b.extents.x, b.extents.z) * 1.15f;
-                    Vector3 c = b.center;
-                    transform.position = c + Quaternion.Euler(0f, orbitAngle, 0f) * Vector3.forward * radius + Vector3.up * 140f;
+                    float half = CityLayout.Size * 0.5f;
+                    Vector3 c = new Vector3(half, CityLayout.Height(half, half), half);
+                    transform.position = c + Quaternion.Euler(0f, orbitAngle, 0f) * Vector3.forward * (half + 120f) + Vector3.up * 170f;
                     LookAt(c, 50f, 1f);
                     break;
                 }

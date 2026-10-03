@@ -3,7 +3,9 @@
 Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 
 ## 게임 내용
-- 약 1.85 km 도심 시가지 서킷 (직각 코너 10개, 콘크리트 방호벽·광고판, 보도, 가로등, 빌딩 숲, 출발 게이트·관중석)
+- 언덕이 있는 오픈 도심 맵: 9×9 도로 격자(블록 96m), 4차선 도로·중앙선·횡단보도·연석·보도, 빌딩 블록과 공원, 가로등, 도시 외곽 방벽
+- GTA 스트리트 레이스 방식: 도시를 도는 약 2.6km 경로에 체크포인트 24개, 순서대로 통과(지름길 가능), 다음 체크포인트 광선 표시
+- 플레이어를 따라 회전하는 레이더식 미니맵(경로선·체크포인트 표시)
 - 메인 화면: 배경에서 차들이 자동 주행하고 시네마틱 카메라가 중계 (START RACE / SETTINGS / CONTROLS / QUIT, 마우스 지원)
 - 설정: 랩 수(1~10), 시간대(낮/밤), AI 난이도(EASY/NORMAL/HARD) — 저장됨
 - 기록: 베스트 랩, 최고 순위 저장 및 메인 화면 표시
@@ -33,7 +35,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 3. 메뉴 **Racing → Setup Scene**: 씬·머티리얼을 코드(`Assets/_Project/Editor/RacingSetup.cs`)로 다시 생성.
 4. 메뉴 **Racing → Build Windows**: `Builds/Windows/Racing.exe` 생성.
 
-트랙 모양은 `RacingSetup.StreetCorners`(도시 블록 꼭짓점, 코너는 자동으로 둥글게 처리)로 정해지며, 도로·방호벽·빌딩은 `TrackBuilder`가 실행 시 생성한다.
+도시 지형·도로 격자는 `CityLayout`(높이 함수, 블록 크기), 레이스 경로는 `RacingSetup.RouteIntersections`(교차로 좌표)로 정해지며, 도시 메쉬는 `TrackBuilder`가 실행 시 생성한다.
 
 ## 개발용 실행 옵션
-`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
+`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-logrespawns`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`

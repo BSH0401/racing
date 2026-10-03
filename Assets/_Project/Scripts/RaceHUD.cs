@@ -103,7 +103,9 @@ namespace Racing
             {
                 int n = race.racers.Length;
                 posText.text = $"{player.position}<size=44>/{n}</size>";
-                lapText.text = $"LAP {player.CurrentLap(race.laps)}/{race.laps}";
+                int cps = race.CheckpointCount;
+                int inLap = player.cpPassed <= 0 ? 0 : (player.cpPassed - 1) % cps;
+                lapText.text = $"LAP {player.CurrentLap(race.laps, cps)}/{race.laps}   <size=28>CP {inLap}/{cps}</size>";
                 float lapTime = state == RaceState.Racing ? race.RaceTime - player.lapStart : 0f;
                 timeText.text = player.finished ? UIKit.FormatTime(player.finishTime) : UIKit.FormatTime(state == RaceState.Racing ? race.RaceTime : 0f);
                 bestText.text = $"LAP {UIKit.FormatTime(lapTime)}    LAST {UIKit.FormatLap(player.lastLap)}    BEST {UIKit.FormatLap(player.bestLap)}";

@@ -13,19 +13,23 @@ namespace Racing
         [System.NonSerialized] public AIDriver ai;
         [System.NonSerialized] public PlayerDriver driver;
 
+        // Nearest route sample (used by the AI and for respawns).
         [System.NonSerialized] public int index;
-        [System.NonSerialized] public int crossings;
-        [System.NonSerialized] public int maxCrossings;
+        // Checkpoints passed since the start; the start line itself is checkpoint 0.
+        [System.NonSerialized] public int cpPassed;
+        [System.NonSerialized] public int lastCp;
         [System.NonSerialized] public float lapStart;
         [System.NonSerialized] public float lastLap;
         [System.NonSerialized] public float bestLap;
         [System.NonSerialized] public bool finished;
         [System.NonSerialized] public float finishTime;
         [System.NonSerialized] public int position;
-        [System.NonSerialized] public float stuckTimer, flipTimer, offTrackTimer, wrongWayTimer;
+        [System.NonSerialized] public float progress;
+        [System.NonSerialized] public float stuckTimer, flipTimer, offTrackTimer, wrongWayTimer, reverseTimer;
         [System.NonSerialized] public int respawns;
 
-        public int CurrentLap(int laps) => Mathf.Clamp(maxCrossings, 1, laps);
+        public int LapsDone(int checkpoints) => cpPassed <= 0 ? 0 : (cpPassed - 1) / checkpoints;
+        public int CurrentLap(int laps, int checkpoints) => Mathf.Clamp(LapsDone(checkpoints) + 1, 1, laps);
 
         void Awake()
         {
@@ -37,15 +41,14 @@ namespace Racing
         public void ResetProgress(int startIndex)
         {
             index = startIndex;
-            crossings = maxCrossings = 0;
-            lapStart = lastLap = finishTime = 0f;
+            cpPassed = 0;
+            lastCp = 0;
+            lapStart = lastLap = finishTime = progress = 0f;
             bestLap = -1f;
             finished = false;
-            stuckTimer = flipTimer = offTrackTimer = wrongWayTimer = 0f;
+            stuckTimer = flipTimer = offTrackTimer = wrongWayTimer = reverseTimer = 0f;
             respawns = 0;
         }
-
-        public float Progress(TrackPath track) => crossings * track.Count + track.Rel(index);
 
         public string ColorHex => ColorUtility.ToHtmlStringRGB(color);
     }

@@ -4,31 +4,25 @@ using UnityEngine.Rendering;
 
 namespace Racing
 {
-    // Generates a street circuit from the TrackPath: road, curbs, concrete barriers with ad panels,
-    // sidewalks, street lamps, start gantry, grandstand and city blocks.
+    // Generates the open city described by CityLayout: hilly terrain with a street grid, curbs,
+    // lane markings, crosswalks, city blocks with buildings or parks, street lamps, a boundary wall
+    // and the start gantry on the race route (TrackPath).
     // Everything is rebuilt on enable (edit and play mode) and never saved into the scene.
     [ExecuteAlways, RequireComponent(typeof(TrackPath))]
     public class TrackBuilder : MonoBehaviour
     {
-        public Material road, curbRed, curbWhite, line, sidewalk, barrier, adA, adB, ground, checkerBlack, gantry, stands, roof, lampPole, lampHead;
+        public Material road, line, yellowLine, sidewalk, grass, barrier, farGround, checkerBlack, gantry, banner, roof, lampPole, lampHead, trunk, leaves;
         public Material[] facades = new Material[0];
-
-        public float curbWidth = 0.8f;
-        public float runoffWidth = 2f;
-        public float barrierHeight = 1.1f;
-        public float barrierThickness = 0.6f;
-        public float sidewalkWidth = 5f;
-        public float lotPitch = 46f;
-        public float cityMargin = 280f;
+        public float cell = 2f;
         public int seed = 7;
         public int cityLayer = 30;
 
         const string RootName = "_Generated";
 
-        // World positions of the lamp heads (filled by Build), used for night lighting.
+        // World positions of lamp heads along the race route (filled by Build), used for night lighting.
         public readonly List<Vector3> LampLightPositions = new List<Vector3>();
 
-        public float WallOffset => GetComponent<TrackPath>().roadHalfWidth + curbWidth + runoffWidth;
+        static float H(float x, float z) => CityLayout.Height(x, z);
 
         void OnEnable() => Build();
 
@@ -40,127 +34,246 @@ namespace Racing
 
             var old = transform.Find(RootName);
             if (old) DestroyGenerated(old.gameObject);
-
             var root = NewObject(RootName, transform);
-            float hw = path.roadHalfWidth;
-            int n = path.Count;
-            float c0 = hw + curbWidth, wall = WallOffset;
 
-            // Road, curbs and asphalt runoff (one collider mesh, three submeshes).
-            var mb = new MeshBuilder(3);
-            for (int i = 0; i < n; i++)
-            {
-                mb.Strip(path, i, -wall, -c0, 0f, 0);
-                mb.Strip(path, i, -hw, hw, 0f, 0);
-                mb.Strip(path, i, c0, wall, 0f, 0);
-                int curbSub = (i / 2) % 2 == 0 ? 1 : 2;
-                mb.Strip(path, i, -c0, -hw, 0.01f, curbSub);
-                mb.Strip(path, i, hw, c0, 0.01f, curbSub);
-            }
-            MeshObject("Road", root, mb.Build(), true, road, curbRed, curbWhite);
-
-            // Painted lines (visual only).
-            var lb = new MeshBuilder(1);
-            for (int i = 0; i < n; i++)
-            {
-                lb.Strip(path, i, -hw + 0.3f, -hw + 0.55f, 0.012f, 0);
-                lb.Strip(path, i, hw - 0.55f, hw - 0.3f, 0.012f, 0);
-                if ((i / 2) % 3 == 0) lb.Strip(path, i, -0.12f, 0.12f, 0.012f, 0);
-            }
-            MeshObject("Lines", root, lb.Build(), false, line);
-
-            // Concrete barriers: inner face carries alternating ad panels.
-            var bb = new MeshBuilder(3);
-            float t = barrierThickness;
-            for (int i = 0; i < n; i++)
-            {
-                int face = (i / 6) % 4 == 1 ? 1 : (i / 6) % 4 == 3 ? 2 : 0;
-                bb.Wall(path, i, -wall, barrierHeight, face);
-                bb.Wall(path, i, -wall - t, barrierHeight, 0);
-                bb.Strip(path, i, -wall - t, -wall, barrierHeight, 0);
-                bb.Wall(path, i, wall, barrierHeight, face);
-                bb.Wall(path, i, wall + t, barrierHeight, 0);
-                bb.Strip(path, i, wall, wall + t, barrierHeight, 0);
-            }
-            MeshObject("Barriers", root, bb.Build(), true, barrier, adA, adB);
-
-            // Raised sidewalks behind the barriers.
-            var sb = new MeshBuilder(1);
-            float s0 = wall + t, s1 = s0 + sidewalkWidth;
-            for (int i = 0; i < n; i++)
-            {
-                sb.Strip(path, i, -s1, -s0, 0.15f, 0);
-                sb.Strip(path, i, s0, s1, 0.15f, 0);
-                sb.Wall(path, i, -s1, 0.15f, 0);
-                sb.Wall(path, i, s1, 0.15f, 0);
-            }
-            var walk = MeshObject("Sidewalks", root, sb.Build(), true, sidewalk);
-            walk.AddComponent<TrackSurface>();
-
-            BuildGround(path, root);
-            Bounds standsBox = BuildStart(path, root);
+            BuildTerrain(root);
+            BuildCurbs(root);
+            BuildMarkings(root);
+            BuildBoundary(root);
+            BuildBlocks(root);
             BuildLamps(path, root);
-            BuildCity(path, root, standsBox);
+            BuildStart(path, root);
 
             SetFlags(root);
         }
 
-        void BuildGround(TrackPath path, GameObject root)
+        // ---- Ground ----
+
+        enum Surface { Road, Walk, Grass }
+
+        Surface Classify(float x, float z)
         {
-            var b = path.GetBounds();
-            float size = 3000f;
+            if (CityLayout.IsRoad(x, z)) return Surface.Road;
+            if (CityLayout.IsSidewalk(x, z)) return Surface.Walk;
+            return CityLayout.IsPark(CityLayout.BlockIndex(x), CityLayout.BlockIndex(z)) ? Surface.Grass : Surface.Walk;
+        }
+
+        void BuildTerrain(GameObject root)
+        {
+            float min = CityLayout.Min, max = CityLayout.Max;
+            int n = Mathf.CeilToInt((max - min) / cell);
+            var grids = new[] { new GridMesh(n, 0f, 4f), new GridMesh(n, CityLayout.CurbHeight, 3f), new GridMesh(n, CityLayout.CurbHeight, 3f) };
+            for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++)
+            {
+                float cx = min + (i + 0.5f) * cell, cz = min + (j + 0.5f) * cell;
+                grids[(int)Classify(cx, cz)].AddCell(i, j, min, cell);
+            }
+            MeshObject("Roads", root, grids[0].Build(), true, road);
+            MeshObject("Sidewalks", root, grids[1].Build(), true, sidewalk);
+            MeshObject("Parks", root, grids[2].Build(), true, grass).AddComponent<TrackSurface>();
+
+            // Distant flat ground below the plateau, seen past the boundary wall.
             var mb = new MeshBuilder(1);
-            Vector3 c = new Vector3(b.center.x, -0.1f, b.center.z);
-            Vector3 h = new Vector3(size * 0.5f, 0f, 0f), v = new Vector3(0f, 0f, size * 0.5f);
-            mb.Quad(0, c - h - v, c + h - v, c + h + v, c - h + v, size / 6f, 0f, size / 6f);
-            var go = MeshObject("Ground", root, mb.Build(), false, ground);
-            var box = go.AddComponent<BoxCollider>();
-            box.center = new Vector3(c.x, c.y - 0.5f, c.z);
-            box.size = new Vector3(size, 1f, size);
-            go.AddComponent<TrackSurface>();
+            float size = 5000f, c = CityLayout.Size * 0.5f;
+            Vector3 o = new Vector3(c, -10f, c), hx = new Vector3(size * 0.5f, 0f, 0f), hz = new Vector3(0f, 0f, size * 0.5f);
+            mb.Quad(0, o - hx - hz, o + hx - hz, o + hx + hz, o - hx + hz, size / 8f, 0f, size / 8f);
+            MeshObject("FarGround", root, mb.Build(), false, farGround);
         }
 
-        // Returns the grandstand footprint (axis-aligned) so buildings keep clear of it.
-        Bounds BuildStart(TrackPath path, GameObject root)
+        // Vertical curb faces between the road surface and the raised sidewalks.
+        void BuildCurbs(GameObject root)
         {
-            int si = path.StartIndex;
-            Vector3 p = path.Point(si), r = path.Right(si), f = path.FlatTangent(si);
-            float hw = path.roadHalfWidth;
-
-            // Checkered line: two rows of 1m squares.
-            var mb = new MeshBuilder(2);
-            int cols = Mathf.RoundToInt(hw * 2f);
-            for (int row = 0; row < 2; row++)
-            for (int col = 0; col < cols; col++)
+            var mb = new MeshBuilder(1);
+            float p = CityLayout.Pitch, r = CityLayout.RoadHalf, size = CityLayout.Size;
+            int lines = CityLayout.Lines;
+            for (int axis = 0; axis < 2; axis++)
+            for (int k = 0; k < lines; k++)
+            for (int s = -1; s <= 1; s += 2)
             {
-                Vector3 o = p + r * (-hw + col) + f * (row - 1f) + Vector3.up * 0.015f;
-                mb.Quad((row + col) % 2, o, o + r, o + r + f, o + f, 1f);
+                float edge = k * p + s * r;
+                bool outer = (k == 0 && s < 0) || (k == lines - 1 && s > 0);
+                if (outer) Curb(mb, axis, edge, -r, size + r);
+                else for (int j = 0; j < lines - 1; j++) Curb(mb, axis, edge, j * p + r, (j + 1) * p - r);
             }
-            MeshObject("StartLine", root, mb.Build(), false, checkerBlack, line);
-
-            // Gantry over the line.
-            float span = WallOffset + barrierThickness + 0.8f;
-            var rot = Quaternion.LookRotation(f);
-            Cube("GantryL", root, p - r * span + Vector3.up * 3.5f, rot, new Vector3(1f, 7f, 1f), gantry);
-            Cube("GantryR", root, p + r * span + Vector3.up * 3.5f, rot, new Vector3(1f, 7f, 1f), gantry);
-            Cube("GantryBeam", root, p + Vector3.up * 7.2f, rot, new Vector3(span * 2f + 1f, 1.4f, 1f), gantry);
-            Cube("GantryBanner", root, p + Vector3.up * 7.2f - f * 0.55f, rot, new Vector3(span * 2f - 2f, 0.9f, 0.1f), curbRed);
-
-            // Grandstand on the left of the start straight.
-            float off = WallOffset + barrierThickness + 3f;
-            var standsBox = new Bounds(p - r * (off + 6f), Vector3.zero);
-            for (int step = 0; step < 5; step++)
-            {
-                Vector3 sp = p - r * (off + step * 2.5f) + Vector3.up * (0.6f + step * 1.1f) - f * 10f;
-                var size = new Vector3(2.5f, 1.2f + step * 2.2f, 80f);
-                Cube("Stand" + step, root, sp, rot, size, stands);
-                standsBox.Encapsulate(sp + f * 42f);
-                standsBox.Encapsulate(sp - f * 42f);
-            }
-            Cube("StandRoof", root, p - r * (off + 6f) + Vector3.up * 13f - f * 10f, rot, new Vector3(14f, 0.4f, 82f), gantry);
-            standsBox.Expand(new Vector3(8f, 0f, 8f));
-            return standsBox;
+            MeshObject("Curbs", root, mb.Build(), true, sidewalk);
         }
+
+        void Curb(MeshBuilder mb, int axis, float edge, float from, float to)
+        {
+            for (float t = from; t < to - 0.01f; t += cell)
+            {
+                float t1 = Mathf.Min(t + cell, to);
+                Vector3 a = Pt(axis, edge, t), b = Pt(axis, edge, t1);
+                Vector3 at = a + Vector3.up * CityLayout.CurbHeight, bt = b + Vector3.up * CityLayout.CurbHeight;
+                mb.Quad(0, a, b, bt, at, 0.2f);
+                mb.Quad(0, b, a, at, bt, 0.2f);
+            }
+        }
+
+        // axis 0: line along z at x = across; axis 1: line along x at z = across.
+        static Vector3 Pt(int axis, float across, float along, float lift = 0f)
+        {
+            float x = axis == 0 ? across : along, z = axis == 0 ? along : across;
+            return new Vector3(x, H(x, z) + lift, z);
+        }
+
+        void BuildMarkings(GameObject root)
+        {
+            var white = new MeshBuilder(1);
+            var yellow = new MeshBuilder(1);
+            float p = CityLayout.Pitch, r = CityLayout.RoadHalf;
+            int lines = CityLayout.Lines;
+            const float lift = 0.03f;
+            for (int axis = 0; axis < 2; axis++)
+            for (int k = 0; k < lines; k++)
+            {
+                float c = k * p;
+                for (int j = 0; j < lines - 1; j++)
+                {
+                    // Segment between intersections j and j+1.
+                    float from = j * p + r, to = (j + 1) * p - r;
+
+                    // Double yellow centre line.
+                    Stripe(yellow, axis, c - 0.35f, c - 0.15f, from + 1f, to - 1f, lift);
+                    Stripe(yellow, axis, c + 0.15f, c + 0.35f, from + 1f, to - 1f, lift);
+                    // Dashed lane dividers.
+                    for (float t = from + 4f; t < to - 4f; t += 6f)
+                    {
+                        Stripe(white, axis, c - 4.1f, c - 3.9f, t, Mathf.Min(t + 3f, to - 4f), lift);
+                        Stripe(white, axis, c + 3.9f, c + 4.1f, t, Mathf.Min(t + 3f, to - 4f), lift);
+                    }
+                    // Crosswalks at both ends.
+                    for (float w = -r + 1f; w < r - 1f; w += 1.4f)
+                    {
+                        Stripe(white, axis, c + w, c + w + 0.7f, from + 0.6f, from + 3.6f, lift);
+                        Stripe(white, axis, c + w, c + w + 0.7f, to - 3.6f, to - 0.6f, lift);
+                    }
+                }
+            }
+            MeshObject("Markings", root, white.Build(), false, line);
+            MeshObject("CentreLines", root, yellow.Build(), false, yellowLine);
+        }
+
+        // Thin strip [a,b] across the street, [from,to] along it, draped on the terrain.
+        void Stripe(MeshBuilder mb, int axis, float a, float b, float from, float to, float lift)
+        {
+            for (float t = from; t < to - 0.01f; t += cell)
+            {
+                float t1 = Mathf.Min(t + cell, to);
+                Vector3 v0 = Pt(axis, a, t, lift), v1 = Pt(axis, b, t, lift), v2 = Pt(axis, b, t1, lift), v3 = Pt(axis, a, t1, lift);
+                if (axis == 0) mb.Quad(0, v0, v1, v2, v3, 1f);
+                else mb.Quad(0, v1, v0, v3, v2, 1f);
+            }
+        }
+
+        // Concrete wall around the edge of the city.
+        void BuildBoundary(GameObject root)
+        {
+            var mb = new MeshBuilder(1);
+            float min = CityLayout.Min, max = CityLayout.Max;
+            const float step = 4f, height = 3f;
+            for (int side = 0; side < 4; side++)
+            for (float t = min; t < max - 0.01f; t += step)
+            {
+                float t1 = Mathf.Min(t + step, max);
+                Vector3 a, b;
+                switch (side)
+                {
+                    case 0: a = new Vector3(t, 0f, min); b = new Vector3(t1, 0f, min); break;
+                    case 1: a = new Vector3(t, 0f, max); b = new Vector3(t1, 0f, max); break;
+                    case 2: a = new Vector3(min, 0f, t); b = new Vector3(min, 0f, t1); break;
+                    default: a = new Vector3(max, 0f, t); b = new Vector3(max, 0f, t1); break;
+                }
+                Vector3 at = new Vector3(a.x, H(a.x, a.z) + height, a.z), bt = new Vector3(b.x, H(b.x, b.z) + height, b.z);
+                a.y = -12f; b.y = -12f;
+                mb.Quad(0, a, b, bt, at, 1f);
+                mb.Quad(0, b, a, at, bt, 1f);
+            }
+            MeshObject("BoundaryWall", root, mb.Build(), true, barrier);
+        }
+
+        // ---- Blocks: buildings, plazas and parks ----
+
+        void BuildBlocks(GameObject root)
+        {
+            var rng = new System.Random(seed);
+            float R() => (float)rng.NextDouble();
+            float p = CityLayout.Pitch, inset = CityLayout.RoadHalf + CityLayout.Sidewalk;
+            int lines = CityLayout.Lines;
+            int fc = Mathf.Max(1, facades.Length);
+            int roofSub = fc;
+            var mb = new MeshBuilder(fc + 1);
+            var cyl = PrimitiveMesh(PrimitiveType.Cylinder);
+            var sph = PrimitiveMesh(PrimitiveType.Sphere);
+            var trunks = new List<CombineInstance>();
+            var crowns = new List<CombineInstance>();
+            Vector2 centre = new Vector2(CityLayout.Size * 0.5f, CityLayout.Size * 0.5f);
+
+            for (int bi = -1; bi < lines; bi++)
+            for (int bj = -1; bj < lines; bj++)
+            {
+                float x0 = bi < 0 ? CityLayout.Min + 3f : bi * p + inset;
+                float x1 = bi >= lines - 1 ? CityLayout.Max - 3f : (bi + 1) * p - inset;
+                float z0 = bj < 0 ? CityLayout.Min + 3f : bj * p + inset;
+                float z1 = bj >= lines - 1 ? CityLayout.Max - 3f : (bj + 1) * p - inset;
+
+                if (CityLayout.IsPark(bi, bj))
+                {
+                    for (int t = 0; t < 14; t++)
+                        AddTree(trunks, crowns, cyl, sph, new Vector3(Mathf.Lerp(x0 + 4f, x1 - 4f, R()), 0f, Mathf.Lerp(z0 + 4f, z1 - 4f, R())), 0.8f + R() * 0.7f, R());
+                    continue;
+                }
+
+                int nx = Mathf.Max(1, Mathf.RoundToInt((x1 - x0) / 36f));
+                int nz = Mathf.Max(1, Mathf.RoundToInt((z1 - z0) / 36f));
+                float lw = (x1 - x0) / nx, ld = (z1 - z0) / nz;
+                for (int lx = 0; lx < nx; lx++)
+                for (int lz = 0; lz < nz; lz++)
+                {
+                    float cx = x0 + (lx + 0.5f) * lw, cz = z0 + (lz + 0.5f) * ld;
+                    if (R() < 0.12f)
+                    {
+                        // Small plaza with a couple of trees.
+                        for (int t = 0; t < 3; t++)
+                            AddTree(trunks, crowns, cyl, sph, new Vector3(cx + (R() - 0.5f) * lw * 0.6f, 0f, cz + (R() - 0.5f) * ld * 0.6f), 0.7f + R() * 0.4f, R());
+                        continue;
+                    }
+                    float w = lw - 3f - R() * 5f, d = ld - 3f - R() * 5f;
+                    float lo = Mathf.Min(Mathf.Min(H(cx - w / 2, cz - d / 2), H(cx + w / 2, cz - d / 2)), Mathf.Min(H(cx - w / 2, cz + d / 2), H(cx + w / 2, cz + d / 2)));
+                    float hi = Mathf.Max(Mathf.Max(H(cx - w / 2, cz - d / 2), H(cx + w / 2, cz - d / 2)), Mathf.Max(H(cx - w / 2, cz + d / 2), H(cx + w / 2, cz + d / 2)));
+                    float downtown = Mathf.Clamp01(1f - Vector2.Distance(new Vector2(cx, cz), centre) / 520f);
+                    float height = Mathf.Lerp(10f, 30f, R()) * Mathf.Lerp(0.8f, 1.6f, downtown);
+                    if (R() < 0.08f + 0.22f * downtown) height = 50f + R() * 80f;
+
+                    int sub = rng.Next(fc);
+                    float baseY = lo - 2f;
+                    float top = hi + CityLayout.CurbHeight + height;
+                    mb.Box(sub, roofSub, new Vector3(cx, baseY, cz), new Vector3(w, top - baseY, d), 24f, 28f);
+                    if (height > 45f && R() < 0.6f)
+                        mb.Box(sub, roofSub, new Vector3(cx, top, cz), new Vector3(w * 0.6f, 4f + R() * 12f, d * 0.6f), 24f, 28f);
+                    else if (R() < 0.5f)
+                        mb.Box(roofSub, roofSub, new Vector3(cx + (R() - 0.5f) * w * 0.4f, top, cz + (R() - 0.5f) * d * 0.4f), new Vector3(4f, 2.2f, 3f), 4f, 4f);
+                }
+            }
+
+            var mats = new Material[fc + 1];
+            for (int i = 0; i < fc; i++) mats[i] = facades.Length > 0 ? facades[i] : roof;
+            mats[roofSub] = roof;
+            var city = MeshObject("Buildings", root, mb.Build(), true, mats);
+            city.layer = cityLayer;
+            MeshObject("Trunks", root, Combine(trunks), false, trunk).layer = cityLayer;
+            MeshObject("Crowns", root, Combine(crowns), false, leaves).layer = cityLayer;
+        }
+
+        static void AddTree(List<CombineInstance> trunks, List<CombineInstance> crowns, Mesh cyl, Mesh sph, Vector3 pos, float s, float spin)
+        {
+            pos.y = H(pos.x, pos.z) + CityLayout.CurbHeight;
+            trunks.Add(Inst(cyl, pos + Vector3.up * 1.5f * s, Quaternion.identity, new Vector3(0.45f, 1.5f, 0.45f) * s));
+            crowns.Add(Inst(sph, pos + Vector3.up * 4.4f * s, Quaternion.Euler(0f, spin * 360f, 0f), new Vector3(3.6f, 4.2f, 3.6f) * s));
+        }
+
+        // ---- Lamps and start ----
 
         void BuildLamps(TrackPath path, GameObject root)
         {
@@ -169,66 +282,65 @@ namespace Racing
             var poles = new List<CombineInstance>();
             var heads = new List<CombineInstance>();
             LampLightPositions.Clear();
-            float off = WallOffset + barrierThickness + 1.2f;
-            int step = Mathf.Max(1, Mathf.RoundToInt(36f / path.Spacing));
-            for (int i = 0; i < path.Count; i += step)
+            float p = CityLayout.Pitch, r = CityLayout.RoadHalf;
+            int lines = CityLayout.Lines;
+            float off = r + 1.3f;
+            for (int axis = 0; axis < 2; axis++)
+            for (int k = 0; k < lines; k++)
+            for (int j = 0; j < lines - 1; j++)
             {
-                float side = (i / step) % 2 == 0 ? 1f : -1f;
-                Vector3 r = path.Right(i) * side;
-                Vector3 basePos = path.Point(i) + r * off;
-                var face = Quaternion.LookRotation(-r);
-                poles.Add(Inst(cyl, basePos + Vector3.up * 4f, Quaternion.identity, new Vector3(0.22f, 4f, 0.22f)));
-                poles.Add(Inst(cube, basePos + Vector3.up * 7.9f - r * 1.3f, face, new Vector3(0.14f, 0.14f, 2.6f)));
-                heads.Add(Inst(cube, basePos + Vector3.up * 7.75f - r * 2.5f, face, new Vector3(0.5f, 0.18f, 0.9f)));
-                LampLightPositions.Add(basePos + Vector3.up * 7.5f - r * 2.5f);
+                float from = j * p + r + 8f, to = (j + 1) * p - r - 8f;
+                int idx = 0;
+                for (float t = from; t <= to + 0.01f; t += (to - from) / 2f, idx++)
+                {
+                    float side = (idx + k + j) % 2 == 0 ? 1f : -1f;
+                    Vector3 basePos = Pt(axis, k * p + side * off, t, CityLayout.CurbHeight);
+                    Vector3 inward = axis == 0 ? new Vector3(-side, 0f, 0f) : new Vector3(0f, 0f, -side);
+                    var face = Quaternion.LookRotation(inward);
+                    poles.Add(Inst(cyl, basePos + Vector3.up * 4f, Quaternion.identity, new Vector3(0.22f, 4f, 0.22f)));
+                    poles.Add(Inst(cube, basePos + Vector3.up * 7.9f + inward * 1.3f, face, new Vector3(0.14f, 0.14f, 2.6f)));
+                    Vector3 head = basePos + Vector3.up * 7.75f + inward * 2.5f;
+                    heads.Add(Inst(cube, head, face, new Vector3(0.5f, 0.18f, 0.9f)));
+                    if (path.MinHorizontalDistance(head) < r + 4f) LampLightPositions.Add(head - Vector3.up * 0.25f);
+                }
             }
-            SetLayer(MeshObject("LampPoles", root, Combine(poles), false, lampPole));
-            SetLayer(MeshObject("LampHeads", root, Combine(heads), false, lampHead));
+            MeshObject("LampPoles", root, Combine(poles), false, lampPole).layer = cityLayer;
+            MeshObject("LampHeads", root, Combine(heads), false, lampHead).layer = cityLayer;
         }
 
-        void BuildCity(TrackPath path, GameObject root, Bounds standsBox)
+        void BuildStart(TrackPath path, GameObject root)
         {
-            var rng = new System.Random(seed);
-            float R() => (float)rng.NextDouble();
-            var b = path.GetBounds();
-            int fc = Mathf.Max(1, facades.Length);
-            int roofSub = fc, plinthSub = fc + 1;
-            var mb = new MeshBuilder(fc + 2);
-            float clear = WallOffset + barrierThickness + sidewalkWidth + 2f;
+            int si = path.StartIndex;
+            Vector3 p = path.Point(si), r = path.Right(si), f = path.FlatTangent(si);
+            float hw = path.roadHalfWidth;
 
-            for (float x = b.min.x - cityMargin; x <= b.max.x + cityMargin; x += lotPitch)
-            for (float z = b.min.z - cityMargin; z <= b.max.z + cityMargin; z += lotPitch)
+            var mb = new MeshBuilder(2);
+            int cols = Mathf.RoundToInt(hw * 2f);
+            for (int row = 0; row < 2; row++)
+            for (int col = 0; col < cols; col++)
             {
-                float w = 16f + R() * 18f, d = 16f + R() * 18f;
-                var c = new Vector3(x + (R() - 0.5f) * (lotPitch - w - 6f), 0f, z + (R() - 0.5f) * (lotPitch - d - 6f));
-                float halfDiag = Mathf.Sqrt(w * w + d * d) * 0.5f + 2f;
-                float dist = path.MinHorizontalDistance(c);
-                if (dist - halfDiag < clear) continue;
-                var fp = new Bounds(c, new Vector3(w + 4f, 10f, d + 4f));
-                if (fp.Intersects(standsBox)) continue;
-
-                // Taller towers near the circuit, lower blocks further out.
-                float nearness = Mathf.Clamp01(1f - (dist - 20f) / 300f);
-                float h = Mathf.Lerp(10f, 34f, R()) * Mathf.Lerp(0.8f, 1.5f, nearness);
-                if (R() < 0.12f + 0.15f * nearness) h = 55f + R() * 75f;
-
-                int sub = rng.Next(fc);
-                mb.Box(plinthSub, plinthSub, new Vector3(c.x, -0.1f, c.z), new Vector3(w + 4f, 0.25f, d + 4f), 4f, 4f);
-                mb.Box(sub, roofSub, new Vector3(c.x, 0.15f, c.z), new Vector3(w, h, d), 24f, 28f);
-                if (h > 40f && R() < 0.6f)
-                    mb.Box(sub, roofSub, new Vector3(c.x, 0.15f + h, c.z), new Vector3(w * 0.6f, 4f + R() * 10f, d * 0.6f), 24f, 28f);
-                else if (R() < 0.5f)
-                    mb.Box(roofSub, roofSub, new Vector3(c.x + (R() - 0.5f) * w * 0.4f, 0.15f + h, c.z + (R() - 0.5f) * d * 0.4f), new Vector3(4f, 2.2f, 3f), 4f, 4f);
+                Vector3 o = p + r * (-hw + col) + f * (row - 1f);
+                Vector3 a = Lift(o), b = Lift(o + r), c = Lift(o + r + f), d = Lift(o + f);
+                mb.Quad((row + col) % 2, a, b, c, d, 1f);
             }
+            MeshObject("StartLine", root, mb.Build(), false, checkerBlack, line);
 
-            var mats = new Material[fc + 2];
-            for (int i = 0; i < fc; i++) mats[i] = facades.Length > 0 ? facades[i] : roof;
-            mats[roofSub] = roof;
-            mats[plinthSub] = sidewalk;
-            SetLayer(MeshObject("City", root, mb.Build(), false, mats));
+            float span = hw + 2f;
+            var rot = Quaternion.LookRotation(f);
+            Vector3 left = p - r * span, right = p + r * span;
+            left.y = H(left.x, left.z);
+            right.y = H(right.x, right.z);
+            float top = Mathf.Max(left.y, right.y) + 7.5f;
+            Cube("GantryL", root, new Vector3(left.x, (left.y + top) / 2f, left.z), rot, new Vector3(1f, top - left.y, 1f), gantry);
+            Cube("GantryR", root, new Vector3(right.x, (right.y + top) / 2f, right.z), rot, new Vector3(1f, top - right.y, 1f), gantry);
+            Vector3 mid = new Vector3(p.x, top, p.z);
+            Cube("GantryBeam", root, mid, rot, new Vector3(span * 2f + 1f, 1.4f, 1f), gantry);
+            Cube("GantryBanner", root, mid - f * 0.55f, rot, new Vector3(span * 2f - 2f, 0.9f, 0.1f), banner);
+
+            static Vector3 Lift(Vector3 v) => new Vector3(v.x, H(v.x, v.z) + 0.035f, v.z);
         }
 
-        void SetLayer(GameObject go) => go.layer = cityLayer;
+        // ---- Helpers ----
 
         static CombineInstance Inst(Mesh m, Vector3 pos, Quaternion rot, Vector3 scale) =>
             new CombineInstance { mesh = m, transform = Matrix4x4.TRS(pos, rot, scale) };
@@ -255,11 +367,9 @@ namespace Racing
             return go;
         }
 
-        static GameObject NewObject(string name, GameObject parent) => NewObject(name, parent.transform);
-
         static GameObject MeshObject(string name, GameObject parent, Mesh mesh, bool collider, params Material[] mats)
         {
-            var go = NewObject(name, parent);
+            var go = NewObject(name, parent.transform);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             go.AddComponent<MeshRenderer>().sharedMaterials = mats;
             if (collider) go.AddComponent<MeshCollider>().sharedMesh = mesh;
@@ -297,6 +407,55 @@ namespace Racing
             if (old) DestroyGenerated(old.gameObject);
         }
 
+        // Height-field grid where only some cells are emitted; vertices are shared and compacted.
+        class GridMesh
+        {
+            readonly int n;
+            readonly float lift, uvScale;
+            readonly int[] map;
+            readonly List<Vector3> verts = new List<Vector3>();
+            readonly List<Vector2> uvs = new List<Vector2>();
+            readonly List<int> tris = new List<int>();
+
+            public GridMesh(int cells, float lift, float uvScale)
+            {
+                n = cells;
+                this.lift = lift;
+                this.uvScale = uvScale;
+                map = new int[(n + 1) * (n + 1)];
+                for (int i = 0; i < map.Length; i++) map[i] = -1;
+            }
+
+            int Vertex(int i, int j, float min, float cell)
+            {
+                int key = j * (n + 1) + i;
+                if (map[key] >= 0) return map[key];
+                float x = min + i * cell, z = min + j * cell;
+                map[key] = verts.Count;
+                verts.Add(new Vector3(x, H(x, z) + lift, z));
+                uvs.Add(new Vector2(x / uvScale, z / uvScale));
+                return map[key];
+            }
+
+            public void AddCell(int i, int j, float min, float cell)
+            {
+                int a = Vertex(i, j, min, cell), b = Vertex(i + 1, j, min, cell), c = Vertex(i + 1, j + 1, min, cell), d = Vertex(i, j + 1, min, cell);
+                tris.Add(a); tris.Add(d); tris.Add(c);
+                tris.Add(a); tris.Add(c); tris.Add(b);
+            }
+
+            public Mesh Build()
+            {
+                var m = new Mesh { indexFormat = IndexFormat.UInt32, hideFlags = HideFlags.DontSave };
+                m.SetVertices(verts);
+                m.SetUVs(0, uvs);
+                m.SetTriangles(tris, 0);
+                m.RecalculateNormals();
+                m.RecalculateBounds();
+                return m;
+            }
+        }
+
         class MeshBuilder
         {
             readonly List<Vector3> verts = new List<Vector3>();
@@ -319,25 +478,6 @@ namespace Racing
                 var t = tris[sub];
                 t.Add(b); t.Add(b + 3); t.Add(b + 2);
                 t.Add(b); t.Add(b + 2); t.Add(b + 1);
-            }
-
-            public void Strip(TrackPath p, int i, float a, float bOff, float h, int sub)
-            {
-                Vector3 up = Vector3.up * h;
-                Vector3 p0 = p.Point(i), p1 = p.Point(i + 1), r0 = p.Right(i), r1 = p.Right(i + 1);
-                float v0 = i * p.Spacing / 4f, v1 = (i + 1) * p.Spacing / 4f;
-                Quad(sub, p0 + r0 * a + up, p0 + r0 * bOff + up, p1 + r1 * bOff + up, p1 + r1 * a + up, (bOff - a) / 4f, v0, v1);
-            }
-
-            // Double-sided vertical strip from below ground to height above the road.
-            public void Wall(TrackPath p, int i, float off, float height, int sub)
-            {
-                Vector3 p0 = p.Point(i), p1 = p.Point(i + 1), r0 = p.Right(i), r1 = p.Right(i + 1);
-                Vector3 b0 = p0 + r0 * off, b1 = p1 + r1 * off;
-                Vector3 t0 = b0 + Vector3.up * height, t1 = b1 + Vector3.up * height;
-                b0.y = -0.3f; b1.y = -0.3f;
-                Quad(sub, b0, b1, t1, t0, 1f);
-                Quad(sub, b1, b0, t0, t1, 1f);
             }
 
             // Axis-aligned box standing on bottom-centre c; side UVs in metres / tile size.

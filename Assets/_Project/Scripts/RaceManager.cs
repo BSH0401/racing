@@ -33,6 +33,13 @@ namespace Racing
         public bool Paused { get; private set; }
         public Racer Player { get; private set; }
         public bool Transitioning { get; private set; }
+
+        // Checkpoints are route samples spaced ~110 m apart; index 0 is the start/finish line.
+        public int CheckpointCount => checkpoints.Length;
+        public Vector3 CheckpointPosition(int k) => track.Point(checkpoints[k % checkpoints.Length]);
+        public float CheckpointSpacing => track.Length / checkpoints.Length;
+        public const float CheckpointRadius = 15f;
+        int[] checkpoints = new int[0];
         public readonly List<Racer> Standings = new List<Racer>();
 
         float baseTimeScale = 1f;
@@ -67,6 +74,9 @@ namespace Racing
             }
 
             foreach (var r in racers) if (r.isPlayer) Player = r;
+            int cpCount = Mathf.Max(8, Mathf.RoundToInt(track.Length / 110f));
+            checkpoints = new int[cpCount];
+            for (int k = 0; k < cpCount; k++) checkpoints[k] = track.Wrap(track.StartIndex + Mathf.RoundToInt(k * track.Count / (float)cpCount));
             sfx = gameObject.AddComponent<AudioSource>();
             sfx.playOnAwake = false;
             beep = SynthAudio.Tone(660f, 0.18f);
@@ -277,58 +287,86 @@ namespace Racing
 
         void UpdateRacer(Racer r, bool countLaps = true)
         {
-            int n = track.Count;
-            int prevRel = track.Rel(r.index);
-            r.index = track.FindClosest(r.transform.position, r.index);
-            int rel = track.Rel(r.index);
-            if (prevRel > n * 3 / 4 && rel < n / 4) r.crossings++;
-            else if (prevRel < n / 4 && rel > n * 3 / 4) r.crossings--;
+            Vector3 pos = r.transform.position;
 
-            if (countLaps && r.crossings > r.maxCrossings && !r.finished)
+            // Keep the nearest route sample; search the whole loop if the car has wandered off the route.
+            Vector3 near = track.Point(r.index);
+            bool onRoute = Flat(pos - near).sqrMagnitude < 40f * 40f;
+            r.index = track.FindClosest(pos, onRoute ? r.index : -1);
+
+            int n = CheckpointCount;
+            int next = r.cpPassed % n;
+            Vector3 cp = CheckpointPosition(next);
+            if (countLaps && !r.finished && Flat(pos - cp).sqrMagnitude < CheckpointRadius * CheckpointRadius && Mathf.Abs(pos.y - cp.y) < 8f)
             {
-                r.maxCrossings = r.crossings;
-                if (r.maxCrossings >= 2)
+                r.cpPassed++;
+                r.lastCp = next;
+                if (next == 0 && r.cpPassed > 1)
                 {
                     float lap = RaceTime - r.lapStart;
                     r.lastLap = lap;
                     if (r.bestLap < 0f || lap < r.bestLap) r.bestLap = lap;
                     r.lapStart = RaceTime;
+                    int done = r.LapsDone(n);
                     bool record = r.isPlayer && SaveBestLap(lap);
                     if (record)
                         hud.Flash("NEW BEST LAP", 1.6f);
-                    else if (r.isPlayer && r.maxCrossings <= laps)
-                        hud.Flash(r.maxCrossings == laps ? "FINAL LAP" : "LAP " + r.maxCrossings, 1.6f);
+                    else if (r.isPlayer && done < laps)
+                        hud.Flash(done + 1 == laps ? "FINAL LAP" : "LAP " + (done + 1), 1.6f);
+                    if (done >= laps) Finish(r);
                 }
-                if (r.maxCrossings > laps) Finish(r);
+                else if (r.isPlayer && next != 0)
+                {
+                    sfx.PlayOneShot(beep, 0.25f);
+                }
+                next = r.cpPassed % n;
+                cp = CheckpointPosition(next);
             }
+            float toNext = Flat(pos - cp).magnitude;
+            r.progress = r.cpPassed * CheckpointSpacing - Mathf.Min(toNext, CheckpointSpacing);
 
             if (State == RaceState.Countdown) return;
             float dt = Time.deltaTime;
             var car = r.car;
+            Vector3 v = car.Body.linearVelocity;
 
-            // Off the track (over a wall, fell off): respawn quickly.
-            float lateral = Mathf.Abs(track.LateralOffset(r.transform.position, r.index));
-            float drop = track.Point(r.index).y - r.transform.position.y;
-            bool lost = lateral > track.roadHalfWidth + 4.5f || drop > 6f;
+            // Fell through the world or left the city.
+            bool lost = pos.y < CityLayout.Height(pos.x, pos.z) - 4f || !CityLayout.InBounds(pos, 2f);
             r.offTrackTimer = lost ? r.offTrackTimer + dt : 0f;
 
-            bool flipped = r.transform.up.y < 0.3f && car.Body.linearVelocity.magnitude < 4f;
+            bool flipped = r.transform.up.y < 0.3f && v.magnitude < 4f;
             r.flipTimer = flipped ? r.flipTimer + dt : 0f;
 
             bool stuck = !r.isPlayer || r.ai.enabled;
-            stuck &= car.Body.linearVelocity.magnitude < 2f;
+            stuck &= v.magnitude < 2f;
             r.stuckTimer = stuck ? r.stuckTimer + dt : 0f;
 
-            float along = Vector3.Dot(car.Body.linearVelocity, track.FlatTangent(r.index));
-            r.wrongWayTimer = along < -3f ? r.wrongWayTimer + dt : 0f;
+            // HUD warning: heading away from the next checkpoint during the race.
+            Vector3 toCp = Flat(cp - pos);
+            bool wrong = countLaps && !r.finished && toCp.sqrMagnitude > 400f && Vector3.Dot(Flat(v), toCp.normalized) < -5f;
+            r.wrongWayTimer = wrong ? r.wrongWayTimer + dt : 0f;
 
-            if (r.offTrackTimer > 1.2f || r.flipTimer > 2f || r.stuckTimer > 3f || (r.ai.enabled && r.wrongWayTimer > 2.5f))
+            // AI recovery: driving against the route direction while on the route.
+            bool reversing = onRoute && Vector3.Dot(v, track.FlatTangent(r.index)) < -3f;
+            r.reverseTimer = reversing ? r.reverseTimer + dt : 0f;
+
+            if (r.offTrackTimer > 0.5f || r.flipTimer > 2f || r.stuckTimer > 3f || (r.ai.enabled && r.reverseTimer > 2.5f))
+            {
+                if (DevFlags.Has("-logrespawns"))
+                    Debug.Log($"[Respawn] {r.racerName} t={RaceTime:F1} pos={pos} terrain={CityLayout.Height(pos.x, pos.z):F1} off={r.offTrackTimer:F1} flip={r.flipTimer:F1} stuck={r.stuckTimer:F1} reverse={r.reverseTimer:F1} cp={r.cpPassed}");
                 Respawn(r);
+            }
         }
 
+        static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
+
+        // Back onto the route: at the nearest route point if close to it, otherwise at the last checkpoint.
         public void Respawn(Racer r)
         {
             int idx = r.index;
+            if (Flat(r.transform.position - track.Point(idx)).sqrMagnitude > 30f * 30f)
+                idx = r.cpPassed > 0 ? checkpoints[r.lastCp] : track.FindClosest(r.transform.position);
+            r.index = idx;
             float lane = 0f;
             Vector3 basePos = track.Point(idx);
             foreach (var other in racers)
@@ -338,7 +376,7 @@ namespace Racing
             }
             Vector3 pos = basePos + track.Right(idx) * lane + Vector3.up * 1.2f;
             r.car.Teleport(pos, Quaternion.LookRotation(track.FlatTangent(idx)));
-            r.stuckTimer = r.flipTimer = r.offTrackTimer = r.wrongWayTimer = 0f;
+            r.stuckTimer = r.flipTimer = r.offTrackTimer = r.wrongWayTimer = r.reverseTimer = 0f;
             r.respawns++;
             if (r.ai) r.ai.ResetLane();
             if (r.isPlayer && chaseCamera) chaseCamera.Snap();
@@ -371,12 +409,11 @@ namespace Racing
         void RubberBand()
         {
             if (!Player || Player.finished) return;
-            float pp = Player.Progress(track);
-            float perMeter = 1f / track.Spacing;
+            float pp = Player.progress;
             foreach (var r in racers)
             {
                 if (r.isPlayer || !r.ai) continue;
-                float gap = (r.Progress(track) - pp) / perMeter;
+                float gap = r.progress - pp;
                 r.ai.speedScale = Mathf.Lerp(1.04f, 0.96f, Mathf.InverseLerp(-200f, 200f, gap));
             }
         }
@@ -389,7 +426,7 @@ namespace Racing
             {
                 if (a.finished != b.finished) return a.finished ? -1 : 1;
                 if (a.finished) return a.finishTime.CompareTo(b.finishTime);
-                return b.Progress(track).CompareTo(a.Progress(track));
+                return b.progress.CompareTo(a.progress);
             });
             for (int i = 0; i < Standings.Count; i++) Standings[i].position = i + 1;
         }
@@ -406,9 +443,9 @@ namespace Racing
             if (quitAfter > 0f && t >= quitAfter)
             {
                 if (Player)
-                    Debug.Log($"[Racing] t={RaceTime:F1} state={State} playerPos={Player.position} lap={Player.CurrentLap(laps)} finished={Player.finished} best={Player.bestLap:F2}");
+                    Debug.Log($"[Racing] t={RaceTime:F1} state={State} playerPos={Player.position} lap={Player.CurrentLap(laps, CheckpointCount)} cp={Player.cpPassed} finished={Player.finished} best={Player.bestLap:F2}");
                 foreach (var r in Standings)
-                    Debug.Log($"[Racing] P{r.position} {r.racerName} laps={r.maxCrossings} finished={r.finished} time={r.finishTime:F2} best={r.bestLap:F2} respawns={r.respawns}");
+                    Debug.Log($"[Racing] P{r.position} {r.racerName} cps={r.cpPassed} finished={r.finished} time={r.finishTime:F2} best={r.bestLap:F2} respawns={r.respawns}");
                 quitAfter = 0f;
                 Quit();
             }

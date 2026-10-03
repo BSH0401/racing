@@ -12,6 +12,8 @@ namespace Racing
         public float spacing = 2f;
         public float roadHalfWidth = 7f;
         public float startDistance = 60f;
+        [Tooltip("Drape the resampled path onto CityLayout's terrain.")]
+        public bool followTerrain;
 
         Vector3[] points, tangents, rights;
         float realSpacing, length;
@@ -61,6 +63,7 @@ namespace Racing
                 float seg = cum[j + 1] - cum[j];
                 float t = seg > 1e-5f ? (target - cum[j]) / seg : 0f;
                 points[i] = Vector3.Lerp(dense[j], dense[(j + 1) % d], t);
+                if (followTerrain) points[i].y = CityLayout.Height(points[i].x, points[i].z);
             }
 
             for (int i = 0; i < count; i++)

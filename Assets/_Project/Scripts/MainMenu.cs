@@ -73,7 +73,7 @@ namespace Racing
             UIKit.Rect("Stripe", panel.transform, new Vector2(0f, 1f), new Vector2(80f, -246f), new Vector2(470f, 10f), new Color(0.9f, 0.12f, 0.1f));
             UIKit.Rect("Stripe2", panel.transform, new Vector2(0f, 1f), new Vector2(560f, -246f), new Vector2(60f, 10f), Color.white);
             var sub = UIKit.Label(panel.transform, 32, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(84f, -276f), new Vector2(600f, 50f));
-            sub.text = "C I T Y   S T R E E T   C I R C U I T";
+            sub.text = "O P E N   C I T Y   S T R E E T   R A C E";
             sub.color = new Color(0.85f, 0.87f, 0.92f);
 
             var footer = UIKit.Label(panel.transform, 22, TextAnchor.LowerLeft, new Vector2(0f, 0f), new Vector2(84f, 40f), new Vector2(600f, 60f));

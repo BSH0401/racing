@@ -17,21 +17,21 @@ namespace Racing.EditorTools
         const int MinimapLayer = 31;
         const int CityLayer = 30;
 
-        // Street circuit drawn as a city-block polyline; corners are rounded by CornerFillets.
-        // Starts at the bottom of the main straight (x = 0) and runs clockwise.
-        static readonly Vector2[] StreetCorners =
+        // Race route through the open city, as street-grid intersections (see CityLayout).
+        // Starts on the long northbound avenue at x = 1 and loops clockwise over the big hill.
+        static readonly Vector2Int[] RouteIntersections =
         {
-            new Vector2(0f, -180f),
-            new Vector2(0f, 220f),
-            new Vector2(120f, 220f),
-            new Vector2(120f, 140f),
-            new Vector2(260f, 140f),
-            new Vector2(260f, 300f),
-            new Vector2(420f, 300f),
-            new Vector2(420f, -40f),
-            new Vector2(300f, -40f),
-            new Vector2(300f, -180f),
+            new Vector2Int(1, 1), new Vector2Int(1, 6), new Vector2Int(3, 6), new Vector2Int(3, 4),
+            new Vector2Int(5, 4), new Vector2Int(5, 7), new Vector2Int(7, 7), new Vector2Int(7, 2),
+            new Vector2Int(4, 2), new Vector2Int(4, 1),
         };
+
+        static Vector2[] RouteCorners()
+        {
+            var pts = new Vector2[RouteIntersections.Length];
+            for (int i = 0; i < pts.Length; i++) pts[i] = (Vector2)RouteIntersections[i] * CityLayout.Pitch;
+            return pts;
+        }
 
         // Replaces each corner with points before/after it so the spline turns with a ~20 m radius
         // and stays straight between corners.
@@ -74,17 +74,22 @@ namespace Racing.EditorTools
             var concreteTex = NoiseTexture("Concrete", 0.85f, 1f, 9);
             var (windowTex, windowLit) = WindowTextures("Windows", 11);
 
+            var grassTex = NoiseTexture("Grass", 0.8f, 1f, 5);
             var road = Mat("Road", new Color(0.28f, 0.28f, 0.3f), 0.25f, 0f, asphaltTex);
             var curbRed = Mat("CurbRed", new Color(0.8f, 0.1f, 0.1f), 0.3f);
             var white = Mat("White", new Color(0.95f, 0.95f, 0.95f), 0.3f);
-            var ground = Mat("Ground", new Color(0.36f, 0.36f, 0.38f), 0.15f, 0f, asphaltTex);
+            var yellow = Mat("YellowLine", new Color(0.95f, 0.75f, 0.1f), 0.3f);
+            var ground = Mat("Ground", new Color(0.3f, 0.42f, 0.24f), 0.05f, 0f, grassTex);
+            var grass = Mat("Grass", new Color(0.36f, 0.56f, 0.26f), 0.1f, 0f, grassTex);
             var sidewalk = Mat("Sidewalk", new Color(0.66f, 0.65f, 0.62f), 0.1f, 0f, concreteTex);
             var barrier = Mat("Barrier", new Color(0.86f, 0.86f, 0.84f), 0.2f, 0f, concreteTex);
-            var adA = Mat("AdRed", new Color(0.85f, 0.15f, 0.12f), 0.4f);
-            var adB = Mat("AdBlue", new Color(0.1f, 0.35f, 0.85f), 0.4f);
             var black = Mat("Black", new Color(0.05f, 0.05f, 0.06f), 0.3f);
             var gantry = Mat("Gantry", new Color(0.18f, 0.19f, 0.24f), 0.4f, 0.3f);
-            var stands = Mat("Stands", new Color(0.55f, 0.58f, 0.66f), 0.2f);
+            var trunk = Mat("Trunk", new Color(0.36f, 0.24f, 0.14f), 0.1f);
+            var leaves = Mat("Leaves", new Color(0.2f, 0.42f, 0.17f), 0.1f);
+            var beam = TransparentMat("CheckpointBeam", new Color(1f, 0.8f, 0.1f, 0.35f));
+            var routeLine = UnlitMat("RouteLine", new Color(1f, 0.78f, 0.1f));
+            var blip = UnlitMat("CheckpointBlip", new Color(1f, 0.45f, 0.05f));
             var roofMat = Mat("Roof", new Color(0.3f, 0.3f, 0.32f), 0.1f, 0f, concreteTex);
             var lampPole = Mat("LampPole", new Color(0.25f, 0.27f, 0.3f), 0.5f, 0.6f);
             var lampHead = Mat("LampHead", new Color(1f, 0.95f, 0.8f), 0.6f);
@@ -156,21 +161,23 @@ namespace Racing.EditorTools
             // Track.
             var trackGo = new GameObject("Track");
             var path = trackGo.AddComponent<TrackPath>();
-            path.controlPoints = CornerFillets(StreetCorners, 20f);
+            path.controlPoints = CornerFillets(RouteCorners(), 12f);
+            path.roadHalfWidth = CityLayout.RoadHalf;
             path.startDistance = 120f;
+            path.followTerrain = true;
             var builder = trackGo.AddComponent<TrackBuilder>();
             builder.road = road;
-            builder.curbRed = curbRed;
-            builder.curbWhite = white;
             builder.line = white;
+            builder.yellowLine = yellow;
             builder.sidewalk = sidewalk;
+            builder.grass = grass;
             builder.barrier = barrier;
-            builder.adA = adA;
-            builder.adB = adB;
-            builder.ground = ground;
+            builder.farGround = ground;
             builder.checkerBlack = black;
             builder.gantry = gantry;
-            builder.stands = stands;
+            builder.banner = curbRed;
+            builder.trunk = trunk;
+            builder.leaves = leaves;
             builder.roof = roofMat;
             builder.lampPole = lampPole;
             builder.lampHead = lampHead;
@@ -208,11 +215,11 @@ namespace Racing.EditorTools
             mini.depth = 1;
             mini.cullingMask = ~(1 << CityLayer);
             mini.clearFlags = CameraClearFlags.SolidColor;
-            mini.backgroundColor = new Color(0.1f, 0.14f, 0.1f);
+            mini.backgroundColor = new Color(0.08f, 0.09f, 0.1f);
             var miniData = miniGo.AddComponent<UniversalAdditionalCameraData>();
             miniData.renderShadows = false;
             miniData.renderPostProcessing = false;
-            miniGo.AddComponent<MinimapCamera>().track = path;
+            miniGo.AddComponent<MinimapCamera>().follow = racers[Drivers.Length].transform;
 
             // Managers.
             var rmGo = new GameObject("RaceManager");
@@ -223,6 +230,14 @@ namespace Racing.EditorTools
             rm.racers = racers;
             rm.chaseCamera = chase;
             rm.hud = hud;
+            rm.laps = 2;
+            var routeDisplay = rmGo.AddComponent<RouteDisplay>();
+            routeDisplay.race = rm;
+            routeDisplay.beamMaterial = beam;
+            routeDisplay.routeMaterial = routeLine;
+            routeDisplay.blipMaterial = blip;
+            routeDisplay.worldLayer = CityLayer;
+            routeDisplay.minimapLayer = MinimapLayer;
 
             var theme = rmGo.AddComponent<ThemeController>();
             theme.sun = sun;
@@ -277,7 +292,7 @@ namespace Racing.EditorTools
             PlayerSettings.resizableWindow = true;
             PlayerSettings.runInBackground = true;
             AssetDatabase.SaveAssets();
-            Debug.Log("[Racing] Scene set up: " + ScenePath + ", track length " + path.Length.ToString("F0") + " m");
+            Debug.Log("[Racing] Scene set up: " + ScenePath + ", route length " + path.Length.ToString("F0") + " m");
         }
 
         class CarParts
@@ -381,10 +396,31 @@ namespace Racing.EditorTools
             return m;
         }
 
+        // Alpha-blended, double-sided unlit material (checkpoint beam).
+        static Material TransparentMat(string name, Color color)
+        {
+            var m = GetOrCreate(name, "Universal Render Pipeline/Unlit");
+            m.SetColor("_BaseColor", color);
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", 0f);
+            m.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            m.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            m.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
+            m.SetFloat("_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
+            m.SetFloat("_ZWrite", 0f);
+            m.SetFloat("_Cull", 0f);
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.renderQueue = (int)RenderQueue.Transparent;
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
         static Material UnlitMat(string name, Color color)
         {
             var m = GetOrCreate(name, "Universal Render Pipeline/Unlit");
             m.SetColor("_BaseColor", color);
+            m.SetFloat("_Cull", 0f);
             EditorUtility.SetDirty(m);
             return m;
         }
