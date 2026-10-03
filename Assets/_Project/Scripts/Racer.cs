@@ -23,6 +23,7 @@ namespace Racing
         [System.NonSerialized] public float finishTime;
         [System.NonSerialized] public int position;
         [System.NonSerialized] public float stuckTimer, flipTimer, offTrackTimer, wrongWayTimer;
+        [System.NonSerialized] public int respawns;
 
         public int CurrentLap(int laps) => Mathf.Clamp(maxCrossings, 1, laps);
 
@@ -41,6 +42,7 @@ namespace Racing
             bestLap = -1f;
             finished = false;
             stuckTimer = flipTimer = offTrackTimer = wrongWayTimer = 0f;
+            respawns = 0;
         }
 
         public float Progress(TrackPath track) => crossings * track.Count + track.Rel(index);

@@ -8,7 +8,7 @@ namespace Racing
     public class AIDriver : MonoBehaviour
     {
         [Range(0.7f, 1f)] public float skill = 0.94f;
-        public float cornerGrip = 1.25f;
+        public float cornerGrip = 1.2f;
         [System.NonSerialized] public float speedScale = 1f;
         [System.NonSerialized] public float difficulty = 1f;
 

@@ -30,7 +30,7 @@ namespace Racing
                 if (kb.sKey.isPressed || kb.downArrowKey.isPressed) kt -= 1f;
                 if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) ks -= 1f;
                 if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) ks += 1f;
-                float rate = ks == 0f || Mathf.Sign(ks) != Mathf.Sign(keyboardSteer) ? 7f : 3.5f;
+                float rate = ks == 0f || Mathf.Sign(ks) != Mathf.Sign(keyboardSteer) ? 9f : 5f;
                 keyboardSteer = Mathf.MoveTowards(keyboardSteer, ks, rate * Time.deltaTime);
                 throttle += kt;
                 steer += keyboardSteer;

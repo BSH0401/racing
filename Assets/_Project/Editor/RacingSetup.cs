@@ -304,19 +304,23 @@ namespace Racing.EditorTools
             box.size = new Vector3(1.8f, 0.7f, 4.2f);
             box.sharedMaterial = parts.physics;
 
-            Part(go, "Body", PrimitiveType.Cube, new Vector3(0f, 0.15f, 0f), new Vector3(1.8f, 0.5f, 4.2f), paint);
-            Part(go, "Nose", PrimitiveType.Cube, new Vector3(0f, 0.05f, 2.05f), new Vector3(1.7f, 0.3f, 0.3f), paint);
-            Part(go, "Cabin", PrimitiveType.Cube, new Vector3(0f, 0.62f, -0.35f), new Vector3(1.45f, 0.45f, 1.9f), parts.glass);
-            Part(go, "Stripe", PrimitiveType.Cube, new Vector3(0f, 0.41f, 1.05f), new Vector3(0.45f, 0.02f, 2f), Mat("White", Color.white, 0.3f));
-            Part(go, "WingL", PrimitiveType.Cube, new Vector3(-0.6f, 0.55f, -1.95f), new Vector3(0.08f, 0.35f, 0.25f), parts.dark);
-            Part(go, "WingR", PrimitiveType.Cube, new Vector3(0.6f, 0.55f, -1.95f), new Vector3(0.08f, 0.35f, 0.25f), parts.dark);
-            Part(go, "Wing", PrimitiveType.Cube, new Vector3(0f, 0.75f, -2f), new Vector3(1.8f, 0.07f, 0.45f), paint);
-            Part(go, "HeadL", PrimitiveType.Cube, new Vector3(-0.6f, 0.2f, 2.1f), new Vector3(0.4f, 0.14f, 0.05f), parts.headlight);
-            Part(go, "HeadR", PrimitiveType.Cube, new Vector3(0.6f, 0.2f, 2.1f), new Vector3(0.4f, 0.14f, 0.05f), parts.headlight);
-            Part(go, "TailL", PrimitiveType.Cube, new Vector3(-0.6f, 0.25f, -2.11f), new Vector3(0.45f, 0.12f, 0.03f), parts.taillight);
-            Part(go, "TailR", PrimitiveType.Cube, new Vector3(0.6f, 0.25f, -2.11f), new Vector3(0.45f, 0.12f, 0.03f), parts.taillight);
+            // Body parts hang off a pivot the controller tilts for roll/pitch.
+            var body = new GameObject("BodyVisual");
+            body.transform.SetParent(go.transform, false);
+            Part(body, "Body", PrimitiveType.Cube, new Vector3(0f, 0.15f, 0f), new Vector3(1.8f, 0.5f, 4.2f), paint);
+            Part(body, "Nose", PrimitiveType.Cube, new Vector3(0f, 0.05f, 2.05f), new Vector3(1.7f, 0.3f, 0.3f), paint);
+            Part(body, "Cabin", PrimitiveType.Cube, new Vector3(0f, 0.62f, -0.35f), new Vector3(1.45f, 0.45f, 1.9f), parts.glass);
+            Part(body, "Stripe", PrimitiveType.Cube, new Vector3(0f, 0.41f, 1.05f), new Vector3(0.45f, 0.02f, 2f), Mat("White", Color.white, 0.3f));
+            Part(body, "WingL", PrimitiveType.Cube, new Vector3(-0.6f, 0.55f, -1.95f), new Vector3(0.08f, 0.35f, 0.25f), parts.dark);
+            Part(body, "WingR", PrimitiveType.Cube, new Vector3(0.6f, 0.55f, -1.95f), new Vector3(0.08f, 0.35f, 0.25f), parts.dark);
+            Part(body, "Wing", PrimitiveType.Cube, new Vector3(0f, 0.75f, -2f), new Vector3(1.8f, 0.07f, 0.45f), paint);
+            Part(body, "HeadL", PrimitiveType.Cube, new Vector3(-0.6f, 0.2f, 2.1f), new Vector3(0.4f, 0.14f, 0.05f), parts.headlight);
+            Part(body, "HeadR", PrimitiveType.Cube, new Vector3(0.6f, 0.2f, 2.1f), new Vector3(0.4f, 0.14f, 0.05f), parts.headlight);
+            Part(body, "TailL", PrimitiveType.Cube, new Vector3(-0.6f, 0.25f, -2.11f), new Vector3(0.45f, 0.12f, 0.03f), parts.taillight);
+            Part(body, "TailR", PrimitiveType.Cube, new Vector3(0.6f, 0.25f, -2.11f), new Vector3(0.45f, 0.12f, 0.03f), parts.taillight);
 
             var car = go.AddComponent<CarController>();
+            car.bodyVisual = body.transform;
             string[] wheelNames = { "WheelFL", "WheelFR", "WheelRL", "WheelRR" };
             for (int i = 0; i < 4; i++)
             {

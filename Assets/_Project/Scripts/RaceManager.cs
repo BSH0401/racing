@@ -76,6 +76,15 @@ namespace Racing
         void Start()
         {
             Application.targetFrameRate = 120;
+            if (DevFlags.Has("-handlingtest"))
+            {
+                // Scripted handling measurements; race logic stays off so nothing respawns the car.
+                PrepareGrid();
+                if (Player) Player.car.InputLocked = false;
+                gameObject.AddComponent<HandlingProbe>().race = this;
+                enabled = false;
+                return;
+            }
             if (DevFlags.Has("-autostart")) { PrepareGrid(); BeginCountdown(); }
             else EnterMenu();
         }
@@ -330,6 +339,7 @@ namespace Racing
             Vector3 pos = basePos + track.Right(idx) * lane + Vector3.up * 1.2f;
             r.car.Teleport(pos, Quaternion.LookRotation(track.FlatTangent(idx)));
             r.stuckTimer = r.flipTimer = r.offTrackTimer = r.wrongWayTimer = 0f;
+            r.respawns++;
             if (r.ai) r.ai.ResetLane();
             if (r.isPlayer && chaseCamera) chaseCamera.Snap();
         }
@@ -398,7 +408,7 @@ namespace Racing
                 if (Player)
                     Debug.Log($"[Racing] t={RaceTime:F1} state={State} playerPos={Player.position} lap={Player.CurrentLap(laps)} finished={Player.finished} best={Player.bestLap:F2}");
                 foreach (var r in Standings)
-                    Debug.Log($"[Racing] P{r.position} {r.racerName} laps={r.maxCrossings} finished={r.finished} time={r.finishTime:F2} best={r.bestLap:F2}");
+                    Debug.Log($"[Racing] P{r.position} {r.racerName} laps={r.maxCrossings} finished={r.finished} time={r.finishTime:F2} best={r.bestLap:F2} respawns={r.respawns}");
                 quitAfter = 0f;
                 Quit();
             }
