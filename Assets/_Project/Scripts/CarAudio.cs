@@ -37,7 +37,10 @@ namespace Racing
             float rpm = Mathf.Lerp(g == 0f ? 0.15f : 0.45f, 1f, inGear);
             float load = Mathf.Abs(car.Throttle);
             source.pitch = 0.65f + rpm * 1.25f + load * 0.05f;
-            source.volume = (listenerCar ? 0.32f : 0.55f) * (0.55f + 0.45f * load);
+            float vol = listenerCar ? 0.32f : 0.55f;
+            var rm = RaceManager.Instance;
+            if (listenerCar && rm && rm.State == RaceState.Menu) vol *= 0.25f;
+            source.volume = vol * (0.55f + 0.45f * load);
         }
     }
 }

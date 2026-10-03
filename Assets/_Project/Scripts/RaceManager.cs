@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -6,8 +7,10 @@ using UnityEngine.InputSystem;
 namespace Racing
 {
     public enum RaceState { Menu, Countdown, Racing, Finished }
+    public enum Difficulty { Easy, Normal, Hard }
 
-    // Race flow: menu -> countdown -> racing -> results. Tracks laps, standings and respawns.
+    // Race flow: main menu (attract mode) -> countdown -> racing -> results.
+    // Tracks laps, standings, respawns and saved records.
     public class RaceManager : MonoBehaviour
     {
         public static RaceManager Instance { get; private set; }
@@ -17,14 +20,19 @@ namespace Racing
         public ChaseCamera chaseCamera;
         public RaceHUD hud;
         public ThemeController theme;
+        public Camera minimapCamera;
         public int laps = 3;
+        public Difficulty difficulty = Difficulty.Normal;
+
+        public float BestLapRecord => PlayerPrefs.GetFloat("bestLap", -1f);
+        public int BestFinishRecord => PlayerPrefs.GetInt("bestFinish", 0);
 
         public RaceState State { get; private set; }
         public float RaceTime { get; private set; }
         public float Countdown { get; private set; }
         public bool Paused { get; private set; }
         public Racer Player { get; private set; }
-        public int MenuRow { get; private set; }
+        public bool Transitioning { get; private set; }
         public readonly List<Racer> Standings = new List<Racer>();
 
         float baseTimeScale = 1f;
@@ -37,14 +45,18 @@ namespace Racing
         string shotDir;
         readonly List<float> shotTimes = new List<float>();
         float quitAfter;
+        float menuStartAt;
 
         void Awake()
         {
             Instance = this;
+            laps = Mathf.Clamp(PlayerPrefs.GetInt("laps", laps), 1, 10);
             laps = Mathf.Clamp(Mathf.RoundToInt(DevFlags.GetFloat("-laps", laps)), 1, 10);
+            difficulty = (Difficulty)Mathf.Clamp(PlayerPrefs.GetInt("difficulty", (int)difficulty), 0, 2);
             baseTimeScale = DevFlags.GetFloat("-timescale", 1f);
             autopilot = DevFlags.Has("-autopilot");
             quitAfter = DevFlags.GetFloat("-quitafter", 0f);
+            menuStartAt = DevFlags.GetFloat("-menustart", 0f);
             shotDir = DevFlags.Get("-shots");
             var times = DevFlags.Get("-shottimes");
             if (!string.IsNullOrEmpty(shotDir) && !string.IsNullOrEmpty(times))
@@ -64,15 +76,66 @@ namespace Racing
         void Start()
         {
             Application.targetFrameRate = 120;
-            ResetRace();
-            if (DevFlags.Has("-autostart")) BeginCountdown();
+            if (DevFlags.Has("-autostart")) { PrepareGrid(); BeginCountdown(); }
+            else EnterMenu();
         }
 
-        public void ResetRace()
+        // ---- Settings (driven by the main menu) ----
+
+        public void SetLaps(int value)
         {
-            Paused = false;
-            Time.timeScale = baseTimeScale;
+            laps = Mathf.Clamp(value, 1, 10);
+            PlayerPrefs.SetInt("laps", laps);
+        }
+
+        public void SetDifficulty(Difficulty d)
+        {
+            difficulty = d;
+            PlayerPrefs.SetInt("difficulty", (int)d);
+        }
+
+        float DifficultyScale => difficulty switch { Difficulty.Easy => 0.9f, Difficulty.Hard => 1.06f, _ => 1f };
+
+        // ---- Flow ----
+
+        // Main menu: every car (including the player's) drives on autopilot behind the menu.
+        void EnterMenu()
+        {
+            PrepareGrid();
             State = RaceState.Menu;
+            foreach (var r in racers)
+            {
+                SetAutopilot(r, true);
+                if (r.ai) { r.ai.difficulty = 1f; r.ai.speedScale = 1f; }
+                r.car.InputLocked = false;
+            }
+            if (chaseCamera) chaseCamera.cinematic = true;
+            if (minimapCamera) minimapCamera.enabled = false;
+        }
+
+        public void StartRace() => Transition(() => { PrepareGrid(); BeginCountdown(); });
+        public void BackToMenu() => Transition(EnterMenu);
+
+        void Transition(System.Action action)
+        {
+            if (!Transitioning) StartCoroutine(TransitionRoutine(action));
+        }
+
+        IEnumerator TransitionRoutine(System.Action action)
+        {
+            Transitioning = true;
+            yield return hud.Fade(0f, 1f, 0.35f);
+            action();
+            yield return null;
+            yield return hud.Fade(1f, 0f, 0.45f);
+            Transitioning = false;
+        }
+
+        void PrepareGrid()
+        {
+            SetPaused(false);
+            State = RaceState.Countdown;
+            Countdown = 3f;
             RaceTime = 0f;
 
             // Player starts at the back of the grid.
@@ -90,10 +153,16 @@ namespace Racing
                 r.ResetProgress(track.FindClosest(r.transform.position));
                 if (r.ai) r.ai.ResetLane();
                 SetAutopilot(r, !r.isPlayer || autopilot);
+                if (r.ai) { r.ai.difficulty = DifficultyScale; r.ai.speedScale = 1f; }
             }
 
             UpdateStandings();
-            if (chaseCamera && Player) chaseCamera.Snap();
+            if (minimapCamera) minimapCamera.enabled = true;
+            if (chaseCamera)
+            {
+                chaseCamera.cinematic = false;
+                if (Player) chaseCamera.Snap();
+            }
         }
 
         void PlaceOnGrid(Racer r, int slot)
@@ -153,12 +222,17 @@ namespace Racing
                 foreach (var r in racers) UpdateRacer(r);
                 RubberBand();
             }
+            else if (State == RaceState.Menu)
+            {
+                foreach (var r in racers) UpdateRacer(r, false);
+            }
             UpdateStandings();
             DevTick();
         }
 
         void HandleInput()
         {
+            if (Transitioning || State == RaceState.Menu) return;
             var kb = Keyboard.current;
             var gp = Gamepad.current;
             bool confirm = (kb != null && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)) || (gp != null && gp.startButton.wasPressedThisFrame);
@@ -167,37 +241,20 @@ namespace Racing
 
             switch (State)
             {
-                case RaceState.Menu:
-                    if (confirm || (gp != null && gp.buttonSouth.wasPressedThisFrame)) BeginCountdown();
-                    bool left = (kb != null && (kb.leftArrowKey.wasPressedThisFrame || kb.aKey.wasPressedThisFrame)) || (gp != null && gp.dpad.left.wasPressedThisFrame);
-                    bool right = (kb != null && (kb.rightArrowKey.wasPressedThisFrame || kb.dKey.wasPressedThisFrame)) || (gp != null && gp.dpad.right.wasPressedThisFrame);
-                    bool up = (kb != null && (kb.upArrowKey.wasPressedThisFrame || kb.wKey.wasPressedThisFrame)) || (gp != null && gp.dpad.up.wasPressedThisFrame);
-                    bool down = (kb != null && (kb.downArrowKey.wasPressedThisFrame || kb.sKey.wasPressedThisFrame)) || (gp != null && gp.dpad.down.wasPressedThisFrame);
-                    if (up || down) MenuRow = 1 - MenuRow;
-                    if (MenuRow == 0)
-                    {
-                        if (left) laps = Mathf.Max(1, laps - 1);
-                        if (right) laps = Mathf.Min(10, laps + 1);
-                    }
-                    else if ((left || right) && theme) theme.Toggle();
-                    if (kb != null && kb.tKey.wasPressedThisFrame && theme) theme.Toggle();
-                    if (back) Quit();
-                    break;
-
                 case RaceState.Countdown:
                 case RaceState.Racing:
                     if (back) SetPaused(!Paused);
                     if (Paused)
                     {
-                        if (reset) { ResetRace(); BeginCountdown(); }
-                        else if (kb != null && kb.qKey.wasPressedThisFrame) ResetRace();
+                        if (reset) StartRace();
+                        else if ((kb != null && kb.qKey.wasPressedThisFrame) || (gp != null && gp.buttonEast.wasPressedThisFrame)) BackToMenu();
                     }
                     else if (reset && State == RaceState.Racing && Player && !Player.finished) Respawn(Player);
                     break;
 
                 case RaceState.Finished:
-                    if (confirm) { ResetRace(); BeginCountdown(); }
-                    else if (back) ResetRace();
+                    if (confirm || (gp != null && gp.buttonSouth.wasPressedThisFrame)) StartRace();
+                    else if (back || (gp != null && gp.buttonEast.wasPressedThisFrame)) BackToMenu();
                     break;
             }
         }
@@ -209,7 +266,7 @@ namespace Racing
             AudioListener.pause = p;
         }
 
-        void UpdateRacer(Racer r)
+        void UpdateRacer(Racer r, bool countLaps = true)
         {
             int n = track.Count;
             int prevRel = track.Rel(r.index);
@@ -218,7 +275,7 @@ namespace Racing
             if (prevRel > n * 3 / 4 && rel < n / 4) r.crossings++;
             else if (prevRel < n / 4 && rel > n * 3 / 4) r.crossings--;
 
-            if (r.crossings > r.maxCrossings && !r.finished)
+            if (countLaps && r.crossings > r.maxCrossings && !r.finished)
             {
                 r.maxCrossings = r.crossings;
                 if (r.maxCrossings >= 2)
@@ -227,13 +284,16 @@ namespace Racing
                     r.lastLap = lap;
                     if (r.bestLap < 0f || lap < r.bestLap) r.bestLap = lap;
                     r.lapStart = RaceTime;
-                    if (r.isPlayer && r.maxCrossings <= laps)
+                    bool record = r.isPlayer && SaveBestLap(lap);
+                    if (record)
+                        hud.Flash("NEW BEST LAP", 1.6f);
+                    else if (r.isPlayer && r.maxCrossings <= laps)
                         hud.Flash(r.maxCrossings == laps ? "FINAL LAP" : "LAP " + r.maxCrossings, 1.6f);
                 }
                 if (r.maxCrossings > laps) Finish(r);
             }
 
-            if (State != RaceState.Racing && State != RaceState.Finished) return;
+            if (State == RaceState.Countdown) return;
             float dt = Time.deltaTime;
             var car = r.car;
 
@@ -285,6 +345,17 @@ namespace Racing
             if (r.ai) r.ai.speedScale = 0.7f;
             UpdateStandings();
             hud.Flash("FINISH!", 2f);
+            if (!autopilot && (BestFinishRecord == 0 || r.position < BestFinishRecord)) PlayerPrefs.SetInt("bestFinish", r.position);
+        }
+
+        // Records only count when a human is driving.
+        bool SaveBestLap(float lap)
+        {
+            if (autopilot) return false;
+            float best = BestLapRecord;
+            if (best > 0f && lap >= best) return false;
+            PlayerPrefs.SetFloat("bestLap", lap);
+            return true;
         }
 
         void RubberBand()
@@ -316,6 +387,7 @@ namespace Racing
         void DevTick()
         {
             float t = Time.unscaledTime;
+            if (menuStartAt > 0f && t >= menuStartAt && State == RaceState.Menu) { menuStartAt = 0f; StartRace(); }
             if (shotTimes.Count > 0 && t >= shotTimes[0])
             {
                 ScreenCapture.CaptureScreenshot(Path.Combine(shotDir, $"shot_{shotTimes[0]:000}.png"));
@@ -332,7 +404,7 @@ namespace Racing
             }
         }
 
-        void Quit()
+        public void Quit()
         {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;

@@ -263,6 +263,8 @@ namespace Racing.EditorTools
                 lightsOn = true,
             };
             rm.theme = theme;
+            rm.minimapCamera = mini;
+            rmGo.AddComponent<MainMenu>().race = rm;
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };

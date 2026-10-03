@@ -10,6 +10,7 @@ namespace Racing
         [Range(0.7f, 1f)] public float skill = 0.94f;
         public float cornerGrip = 1.25f;
         [System.NonSerialized] public float speedScale = 1f;
+        [System.NonSerialized] public float difficulty = 1f;
 
         CarController car;
         Racer racer;
@@ -40,7 +41,7 @@ namespace Racing
             car.Steer = Mathf.Clamp(angle / Mathf.Max(car.CurrentMaxSteer, 5f), -1f, 1f);
 
             // Speed planning: v_corner = sqrt(mu * g * R), then check braking distance to reach it.
-            float top = car.maxSpeed * skill * speedScale;
+            float top = car.maxSpeed * skill * speedScale * difficulty;
             float targetSpeed = top;
             float brake = car.brakeDeceleration * 0.75f;
             float horizon = 20f + speed * speed / (2f * brake);
@@ -49,7 +50,7 @@ namespace Racing
                 float turn = track.TurnAngle(racer.index, d, d + 24f) * Mathf.Deg2Rad;
                 if (turn < 0.02f) continue;
                 float radius = 24f / turn;
-                float vCorner = Mathf.Sqrt(cornerGrip * 9.81f * radius);
+                float vCorner = Mathf.Sqrt(cornerGrip * difficulty * 9.81f * radius);
                 float allowed = Mathf.Sqrt(vCorner * vCorner + 2f * brake * d);
                 targetSpeed = Mathf.Min(targetSpeed, allowed);
             }
