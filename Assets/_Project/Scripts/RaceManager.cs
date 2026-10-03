@@ -230,7 +230,7 @@ namespace Racing
             // Off the track (over a wall, fell off): respawn quickly.
             float lateral = Mathf.Abs(track.LateralOffset(r.transform.position, r.index));
             float drop = track.Point(r.index).y - r.transform.position.y;
-            bool lost = lateral > track.roadHalfWidth + 13f || drop > 6f;
+            bool lost = lateral > track.roadHalfWidth + 4.5f || drop > 6f;
             r.offTrackTimer = lost ? r.offTrackTimer + dt : 0f;
 
             bool flipped = r.transform.up.y < 0.3f && car.Body.linearVelocity.magnitude < 4f;

@@ -15,24 +15,43 @@ namespace Racing.EditorTools
         const string TexDir = Root + "/Textures";
         const string ScenePath = Root + "/Scenes/Race.unity";
         const int MinimapLayer = 31;
+        const int CityLayer = 30;
 
-        static readonly Vector3[] TrackPoints =
+        // Street circuit drawn as a city-block polyline; corners are rounded by CornerFillets.
+        // Starts at the bottom of the main straight (x = 0) and runs clockwise.
+        static readonly Vector2[] StreetCorners =
         {
-            new Vector3(0f, 0f, -100f),
-            new Vector3(0f, 0f, 150f),
-            new Vector3(30f, 2f, 260f),
-            new Vector3(120f, 4f, 310f),
-            new Vector3(230f, 5f, 290f),
-            new Vector3(280f, 4f, 210f),
-            new Vector3(250f, 2f, 130f),
-            new Vector3(300f, 1f, 60f),
-            new Vector3(380f, 0f, 20f),
-            new Vector3(400f, 0f, -80f),
-            new Vector3(340f, 2f, -170f),
-            new Vector3(230f, 3f, -200f),
-            new Vector3(110f, 2f, -210f),
-            new Vector3(30f, 0f, -190f),
+            new Vector2(0f, -180f),
+            new Vector2(0f, 220f),
+            new Vector2(120f, 220f),
+            new Vector2(120f, 140f),
+            new Vector2(260f, 140f),
+            new Vector2(260f, 300f),
+            new Vector2(420f, 300f),
+            new Vector2(420f, -40f),
+            new Vector2(300f, -40f),
+            new Vector2(300f, -180f),
         };
+
+        // Replaces each corner with points before/after it so the spline turns with a ~20 m radius
+        // and stays straight between corners.
+        static Vector3[] CornerFillets(Vector2[] corners, float r)
+        {
+            var pts = new System.Collections.Generic.List<Vector3>();
+            int n = corners.Length;
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 c = corners[i], prev = corners[(i - 1 + n) % n], next = corners[(i + 1) % n];
+                Vector2 din = (c - prev).normalized, dout = (next - c).normalized;
+                if (Vector2.Distance(prev, c) > r * 4f + 10f) pts.Add(V3(c - din * r * 2f));
+                pts.Add(V3(c - din * r));
+                pts.Add(V3(c + dout * r));
+                if (Vector2.Distance(c, next) > r * 4f + 10f) pts.Add(V3(c + dout * r * 2f));
+            }
+            return pts.ToArray();
+        }
+
+        static Vector3 V3(Vector2 v) => new Vector3(v.x, 0f, v.y);
 
         static readonly (string name, Color color, float skill)[] Drivers =
         {
@@ -52,20 +71,31 @@ namespace Racing.EditorTools
             Time.fixedDeltaTime = 1f / 60f;
 
             var asphaltTex = NoiseTexture("Asphalt", 0.82f, 1f, 3);
-            var grassTex = NoiseTexture("Grass", 0.8f, 1f, 5);
+            var concreteTex = NoiseTexture("Concrete", 0.85f, 1f, 9);
+            var windowTex = WindowTexture("Windows", 11);
 
             var road = Mat("Road", new Color(0.28f, 0.28f, 0.3f), 0.25f, 0f, asphaltTex);
             var curbRed = Mat("CurbRed", new Color(0.8f, 0.1f, 0.1f), 0.3f);
             var white = Mat("White", new Color(0.95f, 0.95f, 0.95f), 0.3f);
-            var grass = Mat("Grass", new Color(0.42f, 0.62f, 0.28f), 0.1f, 0f, grassTex);
-            var ground = Mat("Ground", new Color(0.34f, 0.52f, 0.24f), 0.05f, 0f, grassTex);
-            var wall = Mat("Wall", new Color(0.78f, 0.8f, 0.84f), 0.35f);
+            var ground = Mat("Ground", new Color(0.36f, 0.36f, 0.38f), 0.15f, 0f, asphaltTex);
+            var sidewalk = Mat("Sidewalk", new Color(0.66f, 0.65f, 0.62f), 0.1f, 0f, concreteTex);
+            var barrier = Mat("Barrier", new Color(0.86f, 0.86f, 0.84f), 0.2f, 0f, concreteTex);
+            var adA = Mat("AdRed", new Color(0.85f, 0.15f, 0.12f), 0.4f);
+            var adB = Mat("AdBlue", new Color(0.1f, 0.35f, 0.85f), 0.4f);
             var black = Mat("Black", new Color(0.05f, 0.05f, 0.06f), 0.3f);
             var gantry = Mat("Gantry", new Color(0.18f, 0.19f, 0.24f), 0.4f, 0.3f);
-            var trunk = Mat("Trunk", new Color(0.36f, 0.24f, 0.14f), 0.1f);
-            var leaves = Mat("Leaves", new Color(0.18f, 0.42f, 0.16f), 0.1f);
-            var hills = Mat("Hills", new Color(0.36f, 0.48f, 0.34f), 0f);
             var stands = Mat("Stands", new Color(0.55f, 0.58f, 0.66f), 0.2f);
+            var roofMat = Mat("Roof", new Color(0.3f, 0.3f, 0.32f), 0.1f, 0f, concreteTex);
+            var lampPole = Mat("LampPole", new Color(0.25f, 0.27f, 0.3f), 0.5f, 0.6f);
+            var lampHead = Mat("LampHead", new Color(1f, 0.95f, 0.8f), 0.6f, 0f, null, new Color(1f, 0.9f, 0.7f) * 1.5f);
+            var facades = new[]
+            {
+                Mat("FacadeConcrete", new Color(0.78f, 0.77f, 0.74f), 0.3f, 0f, windowTex),
+                Mat("FacadeGlass", new Color(0.55f, 0.7f, 0.85f), 0.85f, 0.4f, windowTex),
+                Mat("FacadeBrick", new Color(0.66f, 0.38f, 0.3f), 0.15f, 0f, windowTex),
+                Mat("FacadeSand", new Color(0.86f, 0.78f, 0.6f), 0.2f, 0f, windowTex),
+                Mat("FacadeSlate", new Color(0.42f, 0.46f, 0.52f), 0.5f, 0.2f, windowTex),
+            };
             var tire = Mat("Tire", new Color(0.08f, 0.08f, 0.08f), 0.2f);
             var glass = Mat("Glass", new Color(0.08f, 0.1f, 0.14f), 0.9f);
             var headlight = Mat("Headlight", new Color(1f, 0.95f, 0.75f), 0.8f, 0f, null, new Color(1f, 0.95f, 0.7f) * 2f);
@@ -82,15 +112,23 @@ namespace Racing.EditorTools
             carPhysics.bounciness = 0.15f;
             carPhysics.frictionCombine = PhysicsMaterialCombine.Minimum;
 
+            foreach (var rpPath in new[] { "Assets/Settings/PC_RPAsset.asset", "Assets/Settings/Mobile_RPAsset.asset" })
+            {
+                var urp = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(rpPath);
+                if (!urp) continue;
+                urp.shadowDistance = 160f;
+                EditorUtility.SetDirty(urp);
+            }
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             // Lighting.
             var sun = new GameObject("Sun").AddComponent<Light>();
             sun.type = LightType.Directional;
-            sun.intensity = 1.4f;
-            sun.color = new Color(1f, 0.96f, 0.88f);
+            sun.intensity = 1.5f;
+            sun.color = new Color(1f, 0.93f, 0.82f);
             sun.shadows = LightShadows.Soft;
-            sun.transform.rotation = Quaternion.Euler(48f, -35f, 0f);
+            sun.transform.rotation = Quaternion.Euler(42f, -40f, 0f);
             RenderSettings.sun = sun;
             RenderSettings.skybox = AssetDatabase.GetBuiltinExtraResource<Material>("Default-Skybox.mat");
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -99,9 +137,9 @@ namespace Racing.EditorTools
             RenderSettings.ambientGroundColor = new Color(0.28f, 0.27f, 0.22f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.7f, 0.79f, 0.9f);
-            RenderSettings.fogStartDistance = 300f;
-            RenderSettings.fogEndDistance = 1400f;
+            RenderSettings.fogColor = new Color(0.72f, 0.77f, 0.84f);
+            RenderSettings.fogStartDistance = 200f;
+            RenderSettings.fogEndDistance = 1100f;
 
             var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>("Assets/Settings/SampleSceneProfile.asset");
             if (profile)
@@ -114,21 +152,26 @@ namespace Racing.EditorTools
             // Track.
             var trackGo = new GameObject("Track");
             var path = trackGo.AddComponent<TrackPath>();
-            path.controlPoints = TrackPoints;
+            path.controlPoints = CornerFillets(StreetCorners, 20f);
+            path.startDistance = 120f;
             var builder = trackGo.AddComponent<TrackBuilder>();
             builder.road = road;
             builder.curbRed = curbRed;
             builder.curbWhite = white;
             builder.line = white;
-            builder.grass = grass;
-            builder.wall = wall;
+            builder.sidewalk = sidewalk;
+            builder.barrier = barrier;
+            builder.adA = adA;
+            builder.adB = adB;
             builder.ground = ground;
             builder.checkerBlack = black;
             builder.gantry = gantry;
-            builder.trunk = trunk;
-            builder.leaves = leaves;
-            builder.hills = hills;
             builder.stands = stands;
+            builder.roof = roofMat;
+            builder.lampPole = lampPole;
+            builder.lampHead = lampHead;
+            builder.facades = facades;
+            builder.cityLayer = CityLayer;
             builder.Build();
 
             // Cars.
@@ -159,6 +202,7 @@ namespace Racing.EditorTools
             var miniGo = new GameObject("Minimap Camera");
             var mini = miniGo.AddComponent<Camera>();
             mini.depth = 1;
+            mini.cullingMask = ~(1 << CityLayer);
             mini.clearFlags = CameraClearFlags.SolidColor;
             mini.backgroundColor = new Color(0.1f, 0.14f, 0.1f);
             var miniData = miniGo.AddComponent<UniversalAdditionalCameraData>();
@@ -328,6 +372,35 @@ namespace Racing.EditorTools
                     float grain = (float)rng.NextDouble();
                     float v = Mathf.Lerp(min, max, smooth * 0.6f + grain * 0.4f);
                     tex.SetPixel(x, y, new Color(v, v, v));
+                }
+                File.WriteAllBytes(p, tex.EncodeToPNG());
+                Object.DestroyImmediate(tex);
+                AssetDatabase.ImportAsset(p);
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(p);
+        }
+
+        // Facade texture: 8x8 window cells (light frames, dark glass, some lit windows).
+        static Texture2D WindowTexture(string name, int seed)
+        {
+            string p = $"{TexDir}/{name}.png";
+            if (!File.Exists(p))
+            {
+                const int size = 256, cells = 8, cell = size / cells;
+                var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
+                var rng = new System.Random(seed);
+                for (int cy = 0; cy < cells; cy++)
+                for (int cx = 0; cx < cells; cx++)
+                {
+                    float r = (float)rng.NextDouble();
+                    Color glass = r < 0.12f ? new Color(0.95f, 0.85f, 0.55f) : Color.Lerp(new Color(0.12f, 0.15f, 0.2f), new Color(0.32f, 0.38f, 0.46f), r);
+                    for (int y = 0; y < cell; y++)
+                    for (int x = 0; x < cell; x++)
+                    {
+                        bool frame = x < 5 || x >= cell - 5 || y < 7 || y >= cell - 4;
+                        float n = 0.93f + (float)rng.NextDouble() * 0.07f;
+                        tex.SetPixel(cx * cell + x, cy * cell + y, frame ? new Color(n, n, n) : glass);
+                    }
                 }
                 File.WriteAllBytes(p, tex.EncodeToPNG());
                 Object.DestroyImmediate(tex);
