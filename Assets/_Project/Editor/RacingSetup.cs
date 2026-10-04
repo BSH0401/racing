@@ -16,7 +16,8 @@ namespace Racing.EditorTools
         const string ScenePath = Root + "/Scenes/Race.unity";
         const int MinimapLayer = 31;
         const int CityLayer = 30;
-        const string KenneyCars = Root + "/ThirdParty/Kenney/Cars/";
+        const string SketchfabCars = Root + "/ThirdParty/Sketchfab/";
+        const string CarMeshDir = Root + "/Generated/CarMeshes";
         const string AmbientCG = Root + "/ThirdParty/AmbientCG/";
         const string PolyHaven = Root + "/ThirdParty/PolyHaven/";
 
@@ -67,20 +68,23 @@ namespace Racing.EditorTools
 
         static Vector3 V3(Vector2 v) => new Vector3(v.x, 0f, v.y);
 
-        // AI drivers and their Kenney Car Kit models; the player drives the sports sedan.
-        static readonly (string name, string model, float skill)[] Drivers =
+        // AI drivers, their Sketchfab car (see ThirdParty/Sketchfab) and minimap/HUD colour;
+        // the player drives the BMW M3 E30.
+        static readonly (string name, string model, float skill, Color color)[] Drivers =
         {
-            ("Blaze", "hatchback-sports", 0.95f),
-            ("Viper", "sedan", 0.93f),
-            ("Nova", "taxi", 0.91f),
-            ("Rook", "police", 0.89f),
-            ("Ember", "suv-luxury", 0.87f),
+            ("Blaze", "Porsche_930", 0.95f, new Color(1f, 0.55f, 0.1f)),
+            ("Viper", "Pack_Sport", 0.93f, new Color(0.2f, 0.85f, 0.9f)),
+            ("Nova", "CrownVic_Taxi", 0.91f, new Color(1f, 0.85f, 0.1f)),
+            ("Rook", "CrownVic_Police", 0.89f, new Color(0.3f, 0.5f, 1f)),
+            ("Ember", "Pack_SUV", 0.87f, new Color(0.75f, 0.35f, 1f)),
         };
-        const string PlayerModel = "sedan-sports";
+        const string PlayerModel = "BMW_M3_E30";
+        static readonly Color PlayerColor = new Color(0.95f, 0.15f, 0.15f);
 
         [MenuItem("Racing/Setup Scene")]
         public static void SetupScene()
         {
+            AssetDatabase.DeleteAsset(CarMeshDir); // regenerated wheel/body splits; drop stale ones
             foreach (var d in new[] { MatDir, TexDir, Root + "/Scenes" }) Directory.CreateDirectory(d);
             AssetDatabase.Refresh();
 
@@ -221,10 +225,10 @@ namespace Racing.EditorTools
             for (int i = 0; i < Drivers.Length; i++)
             {
                 var d = Drivers[i];
-                racers[i] = CreateCar(d.name, d.model, false, carPhysics);
+                racers[i] = CreateCar(d.name, d.model, d.color, false, carPhysics);
                 racers[i].GetComponent<AIDriver>().skill = d.skill;
             }
-            racers[Drivers.Length] = CreateCar("You", PlayerModel, true, carPhysics);
+            racers[Drivers.Length] = CreateCar("You", PlayerModel, PlayerColor, true, carPhysics);
 
             // Cameras.
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
@@ -332,9 +336,51 @@ namespace Racing.EditorTools
             Debug.Log("[Racing] Scene set up: " + ScenePath + ", route length " + path.Length.ToString("F0") + " m");
         }
 
-        // Builds a racer from a Kenney Car Kit model: the body goes under a tilting pivot, the four wheel
-        // nodes move to suspension pivots, and wheel size/positions and the collider come from the model.
-        static Racer CreateCar(string name, string modelName, bool player, PhysicsMaterial physics)
+        // Wheel layout of a canonical Sketchfab car (written next to the .gltf by the import script):
+        // wheel centres FL, FR, RL, RR and the body bounds, in model space (front +Z, ground at y = 0).
+        [System.Serializable]
+        class CarMeta
+        {
+            public float[][] wheels;
+            public float radius;
+            public float[] bodyMin, bodyMax;
+        }
+
+        [System.Serializable]
+        class CarMetaRaw
+        {
+            public float radius;
+            public float[] bodyMin, bodyMax;
+        }
+
+        static CarMeta LoadMeta(string path)
+        {
+            string json = File.ReadAllText(path);
+            var raw = JsonUtility.FromJson<CarMetaRaw>(json);
+            // JsonUtility can't read nested arrays: pull the 12 wheel numbers out by hand.
+            int start = json.IndexOf('[', json.IndexOf("\"wheels\""));
+            int end = start, depth = 0;
+            for (; end < json.Length; end++)
+            {
+                if (json[end] == '[') depth++;
+                else if (json[end] == ']' && --depth == 0) break;
+            }
+            var nums = json.Substring(start, end - start).Replace("[", " ").Replace("]", " ")
+                .Split(new[] { ',', ' ', '\n', '\r', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+            var wheels = new float[4][];
+            for (int i = 0; i < 4; i++)
+            {
+                wheels[i] = new float[3];
+                for (int k = 0; k < 3; k++)
+                    wheels[i][k] = float.Parse(nums[i * 3 + k], System.Globalization.CultureInfo.InvariantCulture);
+            }
+            return new CarMeta { wheels = wheels, radius = raw.radius, bodyMin = raw.bodyMin, bodyMax = raw.bodyMax };
+        }
+
+        // Builds a racer from a canonical Sketchfab glTF car: the body goes under a tilting pivot, the
+        // geometry inside each wheel cylinder is cut out onto a suspension pivot, and the wheel size,
+        // positions and collider come from the car's metadata.
+        static Racer CreateCar(string name, string modelId, Color color, bool player, PhysicsMaterial physics)
         {
             var go = new GameObject(player ? "Car_Player" : "Car_" + name);
             var rb = go.AddComponent<Rigidbody>();
@@ -344,57 +390,51 @@ namespace Racing.EditorTools
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
+            string dir = SketchfabCars + modelId + "/";
+            var meta = LoadMeta(dir + modelId + ".json");
             var body = new GameObject("BodyVisual");
             body.transform.SetParent(go.transform, false);
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(KenneyCars + modelName + ".fbx");
-            var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            PrefabUtility.UnpackPrefabInstance(model, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(dir + modelId + ".gltf");
+            var model = Object.Instantiate(prefab);
             model.name = "Model";
             model.transform.SetParent(body.transform, false);
 
-            var paint = Mat("CarPaint", Color.white, 0.72f, 0.25f, AssetDatabase.LoadAssetAtPath<Texture2D>(KenneyCars + "Textures/colormap.png"));
-            foreach (var r in model.GetComponentsInChildren<Renderer>()) r.sharedMaterial = paint;
-            var bodyMesh = model.transform.Find("body").GetComponent<Renderer>();
-            float scale = 4.3f / bodyMesh.bounds.size.z;
-            model.transform.localScale = Vector3.one * scale;
-
             var car = go.AddComponent<CarController>();
             car.bodyVisual = body.transform;
-            string[] nodes = { "wheel-front-left", "wheel-front-right", "wheel-back-left", "wheel-back-right" };
-            var wheelNodes = new Transform[4];
-            for (int i = 0; i < 4; i++) wheelNodes[i] = model.transform.Find(nodes[i]);
+            car.wheelRadius = meta.radius;
             float sag = car.suspensionRest - 0.09f;
-            float wheelY = wheelNodes[0].localPosition.y * scale;
+            float wheelY = meta.wheels[0][1];
             model.transform.localPosition = new Vector3(0f, -sag - wheelY, 0f);
-            car.wheelRadius = wheelNodes[0].GetComponent<Renderer>().bounds.extents.y;
 
+            string[] names = { "wheel-front-left", "wheel-front-right", "wheel-back-left", "wheel-back-right" };
             var anchors = new Vector3[4];
+            var centres = new Vector3[4];
+            var pivots = new Transform[4];
             for (int i = 0; i < 4; i++)
             {
-                Vector3 lp = wheelNodes[i].localPosition * scale;
-                anchors[i] = new Vector3(lp.x, 0f, lp.z);
-                var pivot = new GameObject(nodes[i]).transform;
-                pivot.SetParent(go.transform, false);
-                pivot.localPosition = anchors[i] - Vector3.up * sag;
-                wheelNodes[i].SetParent(pivot, true);
-                wheelNodes[i].localPosition = Vector3.zero;
-                wheelNodes[i].localRotation = Quaternion.identity;
-                car.wheelVisuals[i] = pivot;
+                centres[i] = new Vector3(meta.wheels[i][0], meta.wheels[i][1], meta.wheels[i][2]);
+                anchors[i] = new Vector3(centres[i].x, 0f, centres[i].z);
+                pivots[i] = new GameObject(names[i]).transform;
+                pivots[i].SetParent(go.transform, false);
+                pivots[i].localPosition = anchors[i] - Vector3.up * sag;
+                car.wheelVisuals[i] = pivots[i];
             }
             car.wheelAnchors = anchors;
+            SplitWheels(model.transform, modelId, centres, meta.radius, pivots);
 
-            // Collider from the body (and spoiler) bounds, with the car at the origin.
-            var b = bodyMesh.bounds;
-            foreach (var r in body.GetComponentsInChildren<Renderer>()) b.Encapsulate(r.bounds);
+            // Collider from the body bounds, with the car at the origin.
+            var lo = new Vector3(meta.bodyMin[0], meta.bodyMin[1], meta.bodyMin[2]);
+            var hi = new Vector3(meta.bodyMax[0], meta.bodyMax[1], meta.bodyMax[2]);
+            Vector3 offset = model.transform.localPosition;
             var box = go.AddComponent<BoxCollider>();
-            box.center = b.center + Vector3.up * 0.05f;
-            box.size = new Vector3(b.size.x * 0.95f, b.size.y * 0.8f, b.size.z * 0.97f);
+            box.center = (lo + hi) * 0.5f + offset + Vector3.up * 0.1f;
+            Vector3 size = hi - lo;
+            box.size = new Vector3(size.x * 0.95f, (size.y - 0.2f) * 0.85f, size.z * 0.97f);
             box.sharedMaterial = physics;
 
             // Cars live on Ignore Raycast so suspension rays skip them.
             foreach (var t in go.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = 2;
 
-            Color color = DominantColor(bodyMesh, KenneyCars + "Textures/colormap.png");
             var marker = UnlitMat("Marker_" + name, color);
             var mk = Part(go, "MinimapMarker", PrimitiveType.Sphere, new Vector3(0f, 40f, 0f), player ? new Vector3(22f, 1f, 22f) : new Vector3(15f, 1f, 15f), marker);
             mk.layer = MinimapLayer;
@@ -410,39 +450,138 @@ namespace Racing.EditorTools
             return racer;
         }
 
-        // Area-weighted most common saturated colour of a mesh on its palette texture (the car's paint).
-        static Color DominantColor(Renderer renderer, string palettePath)
+        // Moves every triangle that lies wholly inside a wheel's cylinder (axis = car X) from the model's
+        // meshes onto that wheel's pivot, so wheels spin and steer even when the source model merged them
+        // into the body. Split meshes are saved as assets under Generated/CarMeshes.
+        static void SplitWheels(Transform model, string modelId, Vector3[] centres, float radius, Transform[] pivots)
         {
-            var tex = new Texture2D(2, 2);
-            tex.LoadImage(File.ReadAllBytes(palettePath));
-            var mesh = renderer.GetComponent<MeshFilter>().sharedMesh;
-            var verts = mesh.vertices;
-            var uvs = mesh.uv;
-            var tris = mesh.triangles;
-            var weights = new System.Collections.Generic.Dictionary<int, float>();
-            var sums = new System.Collections.Generic.Dictionary<int, Color>();
-            for (int i = 0; i < tris.Length; i += 3)
+            Directory.CreateDirectory(CarMeshDir);
+            float rMax = radius * 1.04f;
+            const float halfWidth = 0.24f;
+            int part = 0;
+            foreach (var mf in model.GetComponentsInChildren<MeshFilter>())
             {
-                int a = tris[i], b = tris[i + 1], c = tris[i + 2];
-                float area = Vector3.Cross(verts[b] - verts[a], verts[c] - verts[a]).magnitude;
-                Vector2 uv = (uvs[a] + uvs[b] + uvs[c]) / 3f;
-                Color col = tex.GetPixelBilinear(uv.x, uv.y);
-                Color.RGBToHSV(col, out _, out float sat, out float val);
-                if (sat < 0.3f || val < 0.25f) continue;
-                int key = Mathf.RoundToInt(col.r * 7) * 64 + Mathf.RoundToInt(col.g * 7) * 8 + Mathf.RoundToInt(col.b * 7);
-                weights.TryGetValue(key, out float w);
-                weights[key] = w + area;
-                sums.TryGetValue(key, out Color sum);
-                sums[key] = sum + col * area;
+                var src = mf.sharedMesh;
+                var mr = mf.GetComponent<MeshRenderer>();
+                if (!src || !mr) continue;
+                var verts = src.vertices;
+                var normals = src.normals;
+                var tangents = src.tangents;
+                var uvs = src.uv;
+                var toModel = model.worldToLocalMatrix * mf.transform.localToWorldMatrix;
+                var pos = new Vector3[verts.Length];
+                var wheelOf = new int[verts.Length];
+                for (int v = 0; v < verts.Length; v++)
+                {
+                    pos[v] = toModel.MultiplyPoint3x4(verts[v]);
+                    wheelOf[v] = -1;
+                    for (int w = 0; w < 4; w++)
+                    {
+                        Vector3 d = pos[v] - centres[w];
+                        if (Mathf.Abs(d.x) < halfWidth && d.y * d.y + d.z * d.z < rMax * rMax) { wheelOf[v] = w; break; }
+                    }
+                }
+
+                // Per sub-mesh: body triangles stay, wheel triangles go to their wheel.
+                int subCount = src.subMeshCount;
+                var bodyTris = new System.Collections.Generic.List<int>[subCount];
+                var wheelTris = new System.Collections.Generic.List<int>[4, subCount];
+                bool any = false;
+                for (int s = 0; s < subCount; s++)
+                {
+                    bodyTris[s] = new System.Collections.Generic.List<int>();
+                    for (int w = 0; w < 4; w++) wheelTris[w, s] = new System.Collections.Generic.List<int>();
+                    var tris = src.GetTriangles(s);
+                    for (int t = 0; t < tris.Length; t += 3)
+                    {
+                        int a = tris[t], b = tris[t + 1], c = tris[t + 2];
+                        int w = wheelOf[a];
+                        if (w >= 0 && wheelOf[b] == w && wheelOf[c] == w) { wheelTris[w, s].AddRange(new[] { a, b, c }); any = true; }
+                        else bodyTris[s].AddRange(new[] { a, b, c });
+                    }
+                }
+                if (!any) continue;
+
+                var mats = mr.sharedMaterials;
+                // Wheel pieces: vertices re-expressed relative to the wheel centre (pivot frame = car frame).
+                for (int w = 0; w < 4; w++)
+                {
+                    var subs = new System.Collections.Generic.List<int>();
+                    for (int s = 0; s < subCount; s++) if (wheelTris[w, s].Count > 0) subs.Add(s);
+                    if (subs.Count == 0) continue;
+                    var map = new System.Collections.Generic.Dictionary<int, int>();
+                    var nv = new System.Collections.Generic.List<Vector3>();
+                    var nn = new System.Collections.Generic.List<Vector3>();
+                    var nt = new System.Collections.Generic.List<Vector4>();
+                    var nu = new System.Collections.Generic.List<Vector2>();
+                    var lists = new System.Collections.Generic.List<int[]>();
+                    var normalM = toModel.inverse.transpose;
+                    foreach (int s in subs)
+                    {
+                        var idx = wheelTris[w, s];
+                        var outIdx = new int[idx.Count];
+                        for (int k = 0; k < idx.Count; k++)
+                        {
+                            int o = idx[k];
+                            if (!map.TryGetValue(o, out int n))
+                            {
+                                n = nv.Count;
+                                map[o] = n;
+                                nv.Add(pos[o] - centres[w]);
+                                if (normals.Length > 0) nn.Add(normalM.MultiplyVector(normals[o]).normalized);
+                                if (tangents.Length > 0)
+                                {
+                                    Vector3 tg = toModel.MultiplyVector(tangents[o]).normalized;
+                                    nt.Add(new Vector4(tg.x, tg.y, tg.z, tangents[o].w * Mathf.Sign(toModel.determinant)));
+                                }
+                                if (uvs.Length > 0) nu.Add(uvs[o]);
+                            }
+                            outIdx[k] = n;
+                        }
+                        if (toModel.determinant < 0f)
+                            for (int k = 0; k < outIdx.Length; k += 3) (outIdx[k + 1], outIdx[k + 2]) = (outIdx[k + 2], outIdx[k + 1]);
+                        lists.Add(outIdx);
+                    }
+                    var mesh = new Mesh { name = modelId + "_wheel" + w + "_" + part };
+                    mesh.indexFormat = nv.Count > 65000 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
+                    mesh.SetVertices(nv);
+                    if (nn.Count > 0) mesh.SetNormals(nn);
+                    if (nt.Count > 0) mesh.SetTangents(nt);
+                    if (nu.Count > 0) mesh.SetUVs(0, nu);
+                    mesh.subMeshCount = lists.Count;
+                    for (int k = 0; k < lists.Count; k++) mesh.SetTriangles(lists[k], k);
+                    mesh.RecalculateBounds();
+                    mesh = SaveMesh(mesh);
+                    var piece = new GameObject(mf.name + "_wheel");
+                    piece.transform.SetParent(pivots[w], false);
+                    piece.AddComponent<MeshFilter>().sharedMesh = mesh;
+                    var pr = piece.AddComponent<MeshRenderer>();
+                    var pm = new Material[subs.Count];
+                    for (int k = 0; k < subs.Count; k++) pm[k] = mats[Mathf.Min(subs[k], mats.Length - 1)];
+                    pr.sharedMaterials = pm;
+                }
+
+                // Body remainder keeps the original vertex buffer, minus the wheel triangles.
+                var bodyMesh = Object.Instantiate(src);
+                bodyMesh.name = modelId + "_body_" + part;
+                for (int s = 0; s < subCount; s++) bodyMesh.SetTriangles(bodyTris[s], s);
+                mf.sharedMesh = SaveMesh(bodyMesh);
+                part++;
             }
-            Object.DestroyImmediate(tex);
-            int best = -1;
-            float bestW = 0f;
-            foreach (var kv in weights) if (kv.Value > bestW) { bestW = kv.Value; best = kv.Key; }
-            if (best < 0) return Color.white;
-            Color avg = sums[best] / bestW;
-            avg.a = 1f;
-            return avg;
+        }
+
+        static Mesh SaveMesh(Mesh mesh)
+        {
+            string path = CarMeshDir + "/" + mesh.name + ".asset";
+            var existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            if (existing)
+            {
+                EditorUtility.CopySerialized(mesh, existing);
+                Object.DestroyImmediate(mesh);
+                return existing;
+            }
+            AssetDatabase.CreateAsset(mesh, path);
+            return mesh;
         }
 
         // PBR material from an ambientCG folder: Color, NormalGL and (if present) Emission maps.

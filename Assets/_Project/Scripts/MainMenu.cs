@@ -91,7 +91,7 @@ namespace Racing
             settingsText.color = new Color(0.75f, 0.77f, 0.82f);
 
             var version = UIKit.Label(t, 20, TextAnchor.UpperRight, new Vector2(1f, 1f), new Vector2(-40f, -30f), new Vector2(1100f, 30f));
-            version.text = "v0.6   ·   Cars: Kenney  ·  Textures: ambientCG  ·  HDRI & props: Poly Haven  (CC0)";
+            version.text = "v0.7   ·   Cars: Sketchfab artists (CC BY 4.0, see README)  ·  Textures: ambientCG  ·  HDRI & props: Poly Haven  (CC0)";
             version.color = new Color(1f, 1f, 1f, 0.6f);
 
             BuildMain(panel.transform);

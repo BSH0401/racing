@@ -14,7 +14,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 - 순위/랩/랩타임/베스트랩 HUD, 미니맵, 역주행 경고, 카운트다운, 결과 화면
 - 낮/밤 테마: 밤에는 빌딩 창문 불빛, 가로등·차량 헤드라이트 실제 조명, 야간 하늘과 안개
 - 실사풍 그래픽: 실사 외벽 사진(PBR) 빌딩, 아스팔트·보도블록 PBR 텍스처, HDRI 하늘(낮/밤)로 조명·반사, 소화전·쓰레기통·콘크리트 방호벽 소품, ACES 톤매핑·SSAO·블룸·모션블러
-- 차량 3D 모델: Kenney Car Kit (CC0) — 차량마다 다른 모델
+- 실사 차량 3D 모델(Sketchfab, CC BY 4.0): 플레이어 BMW M3 E30, AI 포르쉐 911 터보·스포츠카·택시·경찰차·SUV — 바퀴가 실제로 회전·조향
 - 합성 엔진음 (5단 기어 피치)
 
 ## 조작
@@ -40,10 +40,16 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 도시 지형·도로 격자는 `CityLayout`(높이 함수, 블록 크기), 레이스 경로는 `RacingSetup.RouteIntersections`(교차로 좌표)로 정해지며, 도시 메쉬는 `TrackBuilder`가 실행 시 생성한다.
 
 ## 개발용 실행 옵션
-`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-logrespawns`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
+`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-showcase <폴더>` (차량별 측면·전면·후면 스크린샷 후 종료), `-logrespawns`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
 
 ## 크레딧
-- 차량 모델: [Kenney](https://www.kenney.nl) Car Kit (CC0)
+- 차량 모델 (CC BY 4.0, 크기·방향·바퀴 분리 등 게임용으로 변환, 텍스처 축소):
+  - "[[FREE] BMW M3 E30](https://sketchfab.com/3d-models/free-bmw-m3-e30-ac3c7013434e403e8faff87948caf422)" by [Martin Trafas](https://sketchfab.com/Bexxie)
+  - "[Porsche 911 (930) Turbo 1975](https://sketchfab.com/3d-models/porsche-911-930-turbo-1975-de1ffd344c41481892511f7fd332c136)" by [Lexyc16](https://sketchfab.com/Lexyc16)
+  - "[Generic passenger car pack](https://sketchfab.com/3d-models/generic-passenger-car-pack-20f9af9b8a404d5cb022ac6fe87f21f5)" by [Comrade1280](https://sketchfab.com/comrade1280) (스포츠카·SUV)
+  - "[2001 Crown Victoria Taxi Game Prop](https://sketchfab.com/3d-models/2001-crown-victoria-taxi-game-prop-2429a825ff1646568e8e6e1453f9c501)" by [8sianDude](https://sketchfab.com/haoliu95)
+  - "[2001 Crown Victoria Police Interceptor Game Prop](https://sketchfab.com/3d-models/2001-crown-victoria-police-interceptor-game-prop-9f30d360cee343efb5a441978ddb57bd)" by [8sianDude](https://sketchfab.com/haoliu95)
+  - 라이선스: [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/), 원본 정보는 `Assets/_Project/ThirdParty/Sketchfab/*/license.txt`
 - PBR 텍스처(도로·보도·건물 외벽): [ambientCG](https://ambientcg.com) (CC0)
 - HDRI 하늘·거리 소품: [Poly Haven](https://polyhaven.com) (CC0)
-- 라이선스 파일: `Assets/_Project/ThirdParty/*/License.txt`
+- 라이선스 파일: `Assets/_Project/ThirdParty/*/License.txt` (Sketchfab은 `license.txt`)

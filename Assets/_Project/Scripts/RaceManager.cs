@@ -95,6 +95,13 @@ namespace Racing
                 enabled = false;
                 return;
             }
+            if (DevFlags.Has("-showcase"))
+            {
+                PrepareGrid();
+                gameObject.AddComponent<CarShowcase>().race = this;
+                enabled = false;
+                return;
+            }
             if (DevFlags.Has("-autostart")) { PrepareGrid(); BeginCountdown(); }
             else EnterMenu();
         }
