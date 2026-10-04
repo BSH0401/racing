@@ -9,6 +9,10 @@ namespace Racing
     public class ThemeSettings
     {
         public Material skybox;
+        [Tooltip("HDRI cubemap used for reflections (and, with skybox ambient, for lighting).")]
+        public Cubemap reflection;
+        public float ambientIntensity = 1f;
+        public float reflectionIntensity = 1f;
         public Color sunColor = Color.white;
         public float sunIntensity = 1f;
         public Vector3 sunEuler = new Vector3(45f, -40f, 0f);
@@ -50,8 +54,8 @@ namespace Racing
                 l.type = LightType.Spot;
                 l.spotAngle = 120f;
                 l.innerSpotAngle = 60f;
-                l.range = 26f;
-                l.intensity = 60f;
+                l.range = 34f;
+                l.intensity = 140f;
                 l.color = new Color(1f, 0.82f, 0.55f);
                 l.shadows = LightShadows.None;
                 streetLights.Add(l);
@@ -88,9 +92,16 @@ namespace Racing
             var s = theme == RaceTheme.Night ? night : day;
 
             if (s.skybox) RenderSettings.skybox = s.skybox;
+            if (s.reflection)
+            {
+                RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Custom;
+                RenderSettings.customReflectionTexture = s.reflection;
+            }
             sun.color = s.sunColor;
             sun.intensity = s.sunIntensity;
             sun.transform.rotation = Quaternion.Euler(s.sunEuler);
+            RenderSettings.ambientIntensity = s.ambientIntensity;
+            RenderSettings.reflectionIntensity = s.reflectionIntensity;
             RenderSettings.ambientSkyColor = s.ambientSky;
             RenderSettings.ambientEquatorColor = s.ambientEquator;
             RenderSettings.ambientGroundColor = s.ambientGround;

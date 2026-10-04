@@ -1,0 +1,3 @@
+Assets from Poly Haven (https://polyhaven.com), licensed CC0 1.0 Universal (public domain).
+HDRIs: kloofendal_48d_partly_cloudy_puresky, rogland_clear_night (2K).
+Models: fire_hydrant, metal_trash_can, concrete_road_barrier (1K).

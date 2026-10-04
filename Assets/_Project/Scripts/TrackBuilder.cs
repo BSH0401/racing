@@ -11,13 +11,17 @@ namespace Racing
     [ExecuteAlways, RequireComponent(typeof(TrackPath))]
     public class TrackBuilder : MonoBehaviour
     {
-        public Material road, line, yellowLine, sidewalk, grass, barrier, farGround, checkerBlack, gantry, banner, lampPole, lampHead, trunk, leaves;
-        [Header("Buildings (Kenney City Kit)")]
-        public GameObject[] buildingPrefabs = new GameObject[0];
-        public GameObject[] skyscraperPrefabs = new GameObject[0];
-        public Material[] buildingMaterials = new Material[0];
-        public float buildingScale = 16f;
-        public float lotSize = 17f;
+        public Material road, line, yellowLine, sidewalk, curbs, grass, barrier, farGround, checkerBlack, gantry, banner, lampPole, lampHead, trunk, leaves;
+        [Header("Buildings: boxes wrapped in photographed facades")]
+        public Material[] facadeMaterials = new Material[0];
+        [Tooltip("Metres covered by one repeat of each facade texture (same order as facadeMaterials).")]
+        public float[] facadeTiles = new float[0];
+        public Material roof;
+        public float lotSize = 30f;
+
+        [Header("Street props (Poly Haven)")]
+        public GameObject hydrant, trashCan, roadBarrier;
+        public Material hydrantMaterial, trashCanMaterial, roadBarrierMaterial;
         public float cell = 2f;
         public int seed = 7;
         public int cityLayer = 30;
@@ -48,6 +52,7 @@ namespace Racing
             BuildBlocks(root);
             BuildLamps(path, root);
             BuildStart(path, root);
+            BuildProps(path, root);
 
             SetFlags(root);
         }
@@ -101,7 +106,7 @@ namespace Racing
                 if (outer) Curb(mb, axis, edge, -r, size + r);
                 else for (int j = 0; j < lines - 1; j++) Curb(mb, axis, edge, j * p + r, (j + 1) * p - r);
             }
-            MeshObject("Curbs", root, mb.Build(), true, sidewalk);
+            MeshObject("Curbs", root, mb.Build(), true, curbs ? curbs : sidewalk);
         }
 
         void Curb(MeshBuilder mb, int axis, float edge, float from, float to)
@@ -200,20 +205,22 @@ namespace Racing
 
         // ---- Blocks: buildings, plazas and parks ----
 
-        // Each block is split into ~17 m lots; the lots along the block edge get a Kenney building
-        // facing the street, sat on a concrete plinth that hides the slope. Parks get trees instead.
+        // Each block is split into ~30 m lots; the lots along the block edge get a building whose box is
+        // wrapped in a photographed facade (towers more likely downtown, some with a setback crown).
+        // Buildings reach down below the lowest ground under them so slopes never show a gap.
         void BuildBlocks(GameObject root)
         {
             var rng = new System.Random(seed);
             float R() => (float)rng.NextDouble();
             float p = CityLayout.Pitch, inset = CityLayout.RoadHalf + CityLayout.Sidewalk;
             int lines = CityLayout.Lines;
-            var plinths = new MeshBuilder(1);
+            int fc = Mathf.Max(1, facadeMaterials.Length);
+            int roofSub = fc;
+            var mb = new MeshBuilder(fc + 1);
             var cyl = PrimitiveMesh(PrimitiveType.Cylinder);
             var sph = PrimitiveMesh(PrimitiveType.Sphere);
             var trunks = new List<CombineInstance>();
             var crowns = new List<CombineInstance>();
-            var buildings = NewObject("Buildings", root.transform);
             Vector2 centre = new Vector2(CityLayout.Size * 0.5f, CityLayout.Size * 0.5f);
 
             for (int bi = -1; bi < lines; bi++)
@@ -239,73 +246,113 @@ namespace Racing
                 {
                     float cx = x0 + (lx + 0.5f) * lw, cz = z0 + (lz + 0.5f) * ld;
                     bool edge = lx == 0 || lz == 0 || lx == nx - 1 || lz == nz - 1;
-                    if (!edge)
-                    {
-                        // Hidden courtyard: an occasional tree.
-                        if (R() < 0.3f) AddTree(trunks, crowns, cyl, sph, new Vector3(cx, 0f, cz), 0.8f + R() * 0.5f, R());
-                        continue;
-                    }
+                    if (!edge) continue;
 
-                    // Face the nearest street (Kenney buildings face +z).
-                    float yaw = lz == 0 ? 180f : lz == nz - 1 ? 0f : lx == 0 ? 270f : 90f;
+                    float w = lw - 1f - R() * 4f, d = ld - 1f - R() * 4f;
+                    float lo = float.MaxValue, hi = float.MinValue;
+                    foreach (var c in new[] { new Vector2(-w, -d), new Vector2(w, -d), new Vector2(-w, d), new Vector2(w, d), Vector2.zero })
+                    {
+                        float h = H(cx + c.x * 0.5f, cz + c.y * 0.5f);
+                        lo = Mathf.Min(lo, h);
+                        hi = Mathf.Max(hi, h);
+                    }
                     float downtown = Mathf.Clamp01(1f - Vector2.Distance(new Vector2(cx, cz), centre) / 520f);
-                    bool tower = skyscraperPrefabs.Length > 0 && R() < 0.1f + 0.35f * downtown;
-                    var set = tower ? skyscraperPrefabs : buildingPrefabs;
-                    if (set.Length == 0) continue;
-                    var prefab = set[rng.Next(set.Length)];
-                    var mat = buildingMaterials.Length > 0 ? buildingMaterials[rng.Next(buildingMaterials.Length)] : null;
-                    float stretch = tower ? 1f + downtown * 0.9f * R() : 1f;
-                    PlaceBuilding(buildings.transform, plinths, prefab, mat, new Vector3(cx, 0f, cz), yaw, Mathf.Min(lw, ld) - 1.5f, stretch);
+                    float height = Mathf.Lerp(12f, 34f, R()) * Mathf.Lerp(0.8f, 1.7f, downtown);
+                    if (R() < 0.1f + 0.3f * downtown) height = 55f + R() * 90f;
+
+                    int sub = rng.Next(fc);
+                    float tile = sub < facadeTiles.Length ? facadeTiles[sub] : 24f;
+                    float baseY = lo - 1.5f;
+                    float top = hi + CityLayout.CurbHeight + height;
+                    mb.Box(sub, roofSub, new Vector3(cx, baseY, cz), new Vector3(w, top - baseY, d), tile, tile);
+                    if (height > 50f && R() < 0.65f)
+                    {
+                        // Setback crown in the same facade.
+                        float crown = 8f + R() * 24f;
+                        mb.Box(sub, roofSub, new Vector3(cx, top, cz), new Vector3(w * 0.65f, crown, d * 0.65f), tile, tile);
+                    }
+                    else
+                    {
+                        // Rooftop plant room.
+                        mb.Box(roofSub, roofSub, new Vector3(cx + (R() - 0.5f) * w * 0.4f, top, cz + (R() - 0.5f) * d * 0.4f), new Vector3(5f, 3f, 4f), 4f, 4f);
+                    }
                 }
             }
 
-            MeshObject("Plinths", root, plinths.Build(), true, sidewalk).layer = cityLayer;
+            var mats = new Material[fc + 1];
+            for (int i = 0; i < fc; i++) mats[i] = facadeMaterials.Length > 0 ? facadeMaterials[i] : roof;
+            mats[roofSub] = roof;
+            MeshObject("Buildings", root, mb.Build(), true, mats).layer = cityLayer;
             MeshObject("Trunks", root, Combine(trunks), false, trunk).layer = cityLayer;
             MeshObject("Crowns", root, Combine(crowns), false, leaves).layer = cityLayer;
         }
 
-        void PlaceBuilding(Transform parent, MeshBuilder plinths, GameObject prefab, Material mat, Vector3 centre, float yaw, float maxFootprint, float stretch)
+        // Fire hydrants and bins along the kerbs, concrete barriers lining the start straight.
+        void BuildProps(TrackPath path, GameObject root)
         {
-            var go = Instantiate(prefab, parent);
-            go.name = prefab.name;
-            var renderers = go.GetComponentsInChildren<Renderer>();
-            go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-
-            // Scale to the lot: the usual scale, shrunk if the footprint would overflow.
-            go.transform.localScale = Vector3.one;
-            Bounds b = WorldBounds(renderers);
-            float foot = Mathf.Max(b.size.x, b.size.z);
-            float s = Mathf.Min(buildingScale, maxFootprint / Mathf.Max(foot, 0.01f));
-            go.transform.localScale = new Vector3(s, s * stretch, s);
-            b = WorldBounds(renderers);
-
-            // Sit the building on the highest ground under it; a plinth fills down to the lowest.
-            float hx = b.extents.x, hz = b.extents.z;
-            float lo = float.MaxValue, hi = float.MinValue;
-            foreach (var c in new[] { new Vector2(-hx, -hz), new Vector2(hx, -hz), new Vector2(-hx, hz), new Vector2(hx, hz), Vector2.zero })
+            var rng = new System.Random(seed + 1);
+            float R() => (float)rng.NextDouble();
+            var props = NewObject("Props", root.transform);
+            float p = CityLayout.Pitch, r = CityLayout.RoadHalf;
+            int lines = CityLayout.Lines;
+            for (int axis = 0; axis < 2; axis++)
+            for (int k = 0; k < lines; k++)
+            for (int j = 0; j < lines - 1; j++)
+            for (int side = -1; side <= 1; side += 2)
             {
-                float h = H(centre.x + c.x, centre.z + c.y);
-                lo = Mathf.Min(lo, h);
-                hi = Mathf.Max(hi, h);
+                float along = j * p + r + 12f + R() * (p - 2f * r - 24f);
+                Vector3 pos = Pt(axis, k * p + side * (r + 0.9f), along, CityLayout.CurbHeight);
+                float roll = R();
+                if (roll < 0.35f) Prop(props.transform, hydrant, hydrantMaterial, pos, R() * 360f, 0.85f);
+                else if (roll < 0.65f) Prop(props.transform, trashCan, trashCanMaterial, pos, R() * 360f, 1.0f);
             }
-            float baseY = hi + CityLayout.CurbHeight;
-            go.transform.position = new Vector3(centre.x, baseY - (b.min.y - go.transform.position.y), centre.z);
-            plinths.Box(0, 0, new Vector3(centre.x, lo - 1f, centre.z), new Vector3(b.size.x + 0.6f, baseY - lo + 1f, b.size.z + 0.6f), 4f, 4f);
 
-            if (mat) foreach (var r in renderers) r.sharedMaterial = mat;
-            foreach (var t in go.GetComponentsInChildren<Transform>()) t.gameObject.layer = cityLayer;
-            b = WorldBounds(renderers);
-            var box = go.AddComponent<BoxCollider>();
-            box.center = go.transform.InverseTransformPoint(b.center);
-            Vector3 size = go.transform.InverseTransformVector(b.size);
-            box.size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
+            // Barriers on both kerbs either side of the start line.
+            int si = path.StartIndex;
+            float step = 3.2f / path.Spacing;
+            for (int n = -14; n <= 14; n++)
+            {
+                int idx = path.Wrap(si + Mathf.RoundToInt(n * step));
+                Vector3 f = path.FlatTangent(idx), rt = path.Right(idx), c = path.Point(idx);
+                foreach (float s in new[] { -1f, 1f })
+                {
+                    Vector3 pos = c + rt * s * (r + 0.7f);
+                    pos.y = H(pos.x, pos.z) + CityLayout.CurbHeight;
+                    Prop(props.transform, roadBarrier, roadBarrierMaterial, pos, Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg + 90f, 1.0f, true);
+                }
+            }
         }
 
-        static Bounds WorldBounds(Renderer[] renderers)
+        // Instantiates a prop scaled to the given height (models may come in any unit).
+        void Prop(Transform parent, GameObject prefab, Material mat, Vector3 pos, float yaw, float height, bool collider = false)
         {
-            var b = renderers[0].bounds;
-            foreach (var r in renderers) b.Encapsulate(r.bounds);
-            return b;
+            if (!prefab) return;
+            var go = Instantiate(prefab, parent);
+            go.name = prefab.name;
+            go.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, yaw, 0f));
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length == 0) return;
+            Bounds b = rends[0].bounds;
+            foreach (var rr in rends) b.Encapsulate(rr.bounds);
+            float s = height / Mathf.Max(b.size.y, 0.001f);
+            go.transform.localScale *= s;
+            b = rends[0].bounds;
+            foreach (var rr in rends) b.Encapsulate(rr.bounds);
+            go.transform.position += Vector3.up * (pos.y - b.min.y);
+            foreach (var rr in rends)
+            {
+                if (mat) rr.sharedMaterial = mat;
+                rr.gameObject.layer = cityLayer;
+            }
+            if (collider)
+            {
+                var box = go.AddComponent<BoxCollider>();
+                b = rends[0].bounds;
+                foreach (var rr in rends) b.Encapsulate(rr.bounds);
+                box.center = go.transform.InverseTransformPoint(b.center);
+                Vector3 size = go.transform.InverseTransformVector(b.size);
+                box.size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
+            }
         }
 
         static void AddTree(List<CombineInstance> trunks, List<CombineInstance> crowns, Mesh cyl, Mesh sph, Vector3 pos, float s, float spin)

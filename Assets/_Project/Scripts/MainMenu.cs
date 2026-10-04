@@ -90,8 +90,8 @@ namespace Racing
             settingsText = UIKit.Label(card.transform, 24, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(34f, -150f), new Vector2(540f, 30f));
             settingsText.color = new Color(0.75f, 0.77f, 0.82f);
 
-            var version = UIKit.Label(t, 20, TextAnchor.UpperRight, new Vector2(1f, 1f), new Vector2(-40f, -30f), new Vector2(700f, 30f));
-            version.text = "v0.5   ·   3D models: Kenney.nl (CC0)";
+            var version = UIKit.Label(t, 20, TextAnchor.UpperRight, new Vector2(1f, 1f), new Vector2(-40f, -30f), new Vector2(1100f, 30f));
+            version.text = "v0.6   ·   Cars: Kenney  ·  Textures: ambientCG  ·  HDRI & props: Poly Haven  (CC0)";
             version.color = new Color(1f, 1f, 1f, 0.6f);
 
             BuildMain(panel.transform);

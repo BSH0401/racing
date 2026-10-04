@@ -13,7 +13,8 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 - GTA5 스타일 차량 물리: 슬립각 타이어 모델, 서스펜션 하중 이동, 후륜 위주 구동 + 트랙션 컨트롤, 자동 카운터스티어·자세 안정화, 차체 롤/피치 연출, 핸드브레이크 드리프트
 - 순위/랩/랩타임/베스트랩 HUD, 미니맵, 역주행 경고, 카운트다운, 결과 화면
 - 낮/밤 테마: 밤에는 빌딩 창문 불빛, 가로등·차량 헤드라이트 실제 조명, 야간 하늘과 안개
-- 차량·건물 3D 모델: Kenney Car Kit / City Kit Commercial (CC0) — 차량마다 다른 모델, 블록 둘레에 거리를 향한 빌딩, 밤에는 유리창 발광
+- 실사풍 그래픽: 실사 외벽 사진(PBR) 빌딩, 아스팔트·보도블록 PBR 텍스처, HDRI 하늘(낮/밤)로 조명·반사, 소화전·쓰레기통·콘크리트 방호벽 소품, ACES 톤매핑·SSAO·블룸·모션블러
+- 차량 3D 모델: Kenney Car Kit (CC0) — 차량마다 다른 모델
 - 합성 엔진음 (5단 기어 피치)
 
 ## 조작
@@ -42,4 +43,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 `-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-logrespawns`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
 
 ## 크레딧
-- 3D 모델: [Kenney](https://www.kenney.nl) — Car Kit, City Kit (Commercial), CC0 라이선스 (`Assets/_Project/ThirdParty/Kenney/*/License.txt`)
+- 차량 모델: [Kenney](https://www.kenney.nl) Car Kit (CC0)
+- PBR 텍스처(도로·보도·건물 외벽): [ambientCG](https://ambientcg.com) (CC0)
+- HDRI 하늘·거리 소품: [Poly Haven](https://polyhaven.com) (CC0)
+- 라이선스 파일: `Assets/_Project/ThirdParty/*/License.txt`

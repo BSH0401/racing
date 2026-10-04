@@ -17,7 +17,19 @@ namespace Racing.EditorTools
         const int MinimapLayer = 31;
         const int CityLayer = 30;
         const string KenneyCars = Root + "/ThirdParty/Kenney/Cars/";
-        const string KenneyCity = Root + "/ThirdParty/Kenney/City/";
+        const string AmbientCG = Root + "/ThirdParty/AmbientCG/";
+        const string PolyHaven = Root + "/ThirdParty/PolyHaven/";
+
+        // Photographed facades (ambientCG): folder, metres per texture repeat, smoothness, metallic.
+        static readonly (string id, float tile, float smooth, float metal)[] Facades =
+        {
+            ("Facade001", 28f, 0.85f, 0.5f),
+            ("Facade005", 30f, 0.85f, 0.5f),
+            ("Facade006", 28f, 0.6f, 0.2f),
+            ("Facade018A", 28f, 0.3f, 0f),
+            ("Facade019A", 28f, 0.35f, 0f),
+            ("Facade020B", 21f, 0.3f, 0f),
+        };
 
         // Race route through the open city, as street-grid intersections (see CityLayout).
         // Starts on the long northbound avenue at x = 1 and loops clockwise over the big hill.
@@ -78,13 +90,15 @@ namespace Racing.EditorTools
             var concreteTex = NoiseTexture("Concrete", 0.85f, 1f, 9);
 
             var grassTex = NoiseTexture("Grass", 0.8f, 1f, 5);
-            var road = Mat("Road", new Color(0.28f, 0.28f, 0.3f), 0.25f, 0f, asphaltTex);
+            var road = PbrMat("Road", "Asphalt025C", new Color(0.95f, 0.95f, 0.95f), 0.4f, 0f);
             var curbRed = Mat("CurbRed", new Color(0.8f, 0.1f, 0.1f), 0.3f);
             var white = Mat("White", new Color(0.95f, 0.95f, 0.95f), 0.3f);
             var yellow = Mat("YellowLine", new Color(0.95f, 0.75f, 0.1f), 0.3f);
             var ground = Mat("Ground", new Color(0.3f, 0.42f, 0.24f), 0.05f, 0f, grassTex);
             var grass = Mat("Grass", new Color(0.36f, 0.56f, 0.26f), 0.1f, 0f, grassTex);
-            var sidewalk = Mat("Sidewalk", new Color(0.66f, 0.65f, 0.62f), 0.1f, 0f, concreteTex);
+            var sidewalk = PbrMat("Sidewalk", "PavingStones150", new Color(0.9f, 0.9f, 0.9f), 0.25f, 0f);
+            sidewalk.SetTextureScale("_BaseMap", new Vector2(1f, 2f));
+            var curbStone = Mat("CurbStone", new Color(0.62f, 0.61f, 0.58f), 0.15f, 0f, concreteTex);
             var barrier = Mat("Barrier", new Color(0.86f, 0.86f, 0.84f), 0.2f, 0f, concreteTex);
             var black = Mat("Black", new Color(0.05f, 0.05f, 0.06f), 0.3f);
             var gantry = Mat("Gantry", new Color(0.18f, 0.19f, 0.24f), 0.4f, 0.3f);
@@ -96,19 +110,23 @@ namespace Racing.EditorTools
             var lampPole = Mat("LampPole", new Color(0.25f, 0.27f, 0.3f), 0.5f, 0.6f);
             var lampHead = Mat("LampHead", new Color(1f, 0.95f, 0.8f), 0.6f);
             EnableEmission(lampHead, null);
-            var cityMap = AssetDatabase.LoadAssetAtPath<Texture2D>(KenneyCity + "Textures/colormap.png");
-            var cityGlow = CityWindowGlow(KenneyCity + "Textures/colormap.png", TexDir + "/CityWindowsLit.png");
-            var buildingMats = new[]
+            var facadeMats = new Material[Facades.Length];
+            var facadeTiles = new float[Facades.Length];
+            for (int i = 0; i < Facades.Length; i++)
             {
-                Mat("CityWhite", new Color(1f, 1f, 1f), 0.35f, 0f, cityMap),
-                Mat("CityWarm", new Color(1f, 0.92f, 0.8f), 0.35f, 0f, cityMap),
-                Mat("CityCool", new Color(0.82f, 0.86f, 0.93f), 0.35f, 0f, cityMap),
-                Mat("CityRose", new Color(1f, 0.85f, 0.82f), 0.35f, 0f, cityMap),
-                Mat("CitySlate", new Color(0.7f, 0.72f, 0.76f), 0.35f, 0f, cityMap),
-            };
-            foreach (var m in buildingMats) EnableEmission(m, cityGlow);
-            var skyDay = Skybox("SkyDay", new Color(0.5f, 0.5f, 0.5f), new Color(0.37f, 0.35f, 0.33f), 1.3f, 1f, 0.04f);
-            var skyNight = Skybox("SkyNight", new Color(0.18f, 0.22f, 0.45f), new Color(0.02f, 0.02f, 0.03f), 0.12f, 0.45f, 0.02f);
+                var f = Facades[i];
+                facadeMats[i] = PbrMat("Facade_" + f.id, f.id, Color.white, f.smooth, f.metal);
+                facadeTiles[i] = f.tile;
+            }
+            var roofMat = Mat("Roof", new Color(0.42f, 0.42f, 0.44f), 0.15f, 0f, concreteTex);
+            var hydrantMat = PropMat("Prop_FireHydrant", "fire_hydrant", 0.45f, 0.3f);
+            var trashMat = PropMat("Prop_TrashCan", "metal_trash_can", 0.5f, 0.6f);
+            var barrierMat = PropMat("Prop_RoadBarrier", "concrete_road_barrier", 0.2f, 0f);
+
+            var dayCube = Hdri("kloofendal_48d_partly_cloudy_puresky_2k.hdr");
+            var nightCube = Hdri("rogland_clear_night_2k.hdr");
+            var skyDay = CubeSkybox("SkyDay", dayCube, 1f, 0f);
+            var skyNight = CubeSkybox("SkyNight", nightCube, 0.6f, 0f);
 
             var carPhysics = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(MatDir + "/CarBody.physicMaterial");
             if (!carPhysics)
@@ -125,7 +143,11 @@ namespace Racing.EditorTools
             {
                 var urp = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(rpPath);
                 if (!urp) continue;
-                urp.shadowDistance = 160f;
+                urp.shadowDistance = 220f;
+                var so = new SerializedObject(urp);
+                so.FindProperty("m_MainLightShadowmapResolution").intValue = 4096;
+                so.FindProperty("m_ColorGradingMode").intValue = 1; // HDR grading
+                so.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(urp);
             }
 
@@ -134,29 +156,30 @@ namespace Racing.EditorTools
             // Lighting.
             var sun = new GameObject("Sun").AddComponent<Light>();
             sun.type = LightType.Directional;
-            sun.intensity = 1.5f;
-            sun.color = new Color(1f, 0.93f, 0.82f);
+            sun.intensity = 1.7f;
+            sun.color = new Color(1f, 0.95f, 0.87f);
             sun.shadows = LightShadows.Soft;
             sun.transform.rotation = Quaternion.Euler(42f, -40f, 0f);
             RenderSettings.sun = sun;
             RenderSettings.skybox = skyDay;
-            RenderSettings.ambientMode = AmbientMode.Trilight;
+            // Image-based lighting from the HDRI: ambient from the sky, reflections from the cubemap.
+            RenderSettings.ambientMode = AmbientMode.Skybox;
+            RenderSettings.ambientIntensity = 1f;
+            RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
+            RenderSettings.customReflectionTexture = dayCube;
+            RenderSettings.reflectionIntensity = 1f;
             RenderSettings.ambientSkyColor = new Color(0.62f, 0.7f, 0.82f);
             RenderSettings.ambientEquatorColor = new Color(0.5f, 0.55f, 0.55f);
             RenderSettings.ambientGroundColor = new Color(0.28f, 0.27f, 0.22f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.72f, 0.77f, 0.84f);
-            RenderSettings.fogStartDistance = 200f;
-            RenderSettings.fogEndDistance = 1100f;
+            RenderSettings.fogColor = new Color(0.74f, 0.79f, 0.86f);
+            RenderSettings.fogStartDistance = 160f;
+            RenderSettings.fogEndDistance = 1300f;
 
-            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>("Assets/Settings/SampleSceneProfile.asset");
-            if (profile)
-            {
-                var vol = new GameObject("PostProcess").AddComponent<Volume>();
-                vol.isGlobal = true;
-                vol.sharedProfile = profile;
-            }
+            var vol = new GameObject("PostProcess").AddComponent<Volume>();
+            vol.isGlobal = true;
+            vol.sharedProfile = RealisticProfile();
 
             // Track.
             var trackGo = new GameObject("Track");
@@ -178,9 +201,16 @@ namespace Racing.EditorTools
             builder.banner = curbRed;
             builder.trunk = trunk;
             builder.leaves = leaves;
-            builder.buildingPrefabs = LoadModels(KenneyCity, "building-", "abcdefghijklmn");
-            builder.skyscraperPrefabs = LoadModels(KenneyCity, "building-skyscraper-", "abcde");
-            builder.buildingMaterials = buildingMats;
+            builder.facadeMaterials = facadeMats;
+            builder.facadeTiles = facadeTiles;
+            builder.roof = roofMat;
+            builder.curbs = curbStone;
+            builder.hydrant = Model(PolyHaven + "Props/fire_hydrant/fire_hydrant.fbx");
+            builder.trashCan = Model(PolyHaven + "Props/metal_trash_can/metal_trash_can.fbx");
+            builder.roadBarrier = Model(PolyHaven + "Props/concrete_road_barrier/concrete_road_barrier.fbx");
+            builder.hydrantMaterial = hydrantMat;
+            builder.trashCanMaterial = trashMat;
+            builder.roadBarrierMaterial = barrierMat;
             builder.lampPole = lampPole;
             builder.lampHead = lampHead;
             builder.cityLayer = CityLayer;
@@ -243,11 +273,12 @@ namespace Racing.EditorTools
             theme.sun = sun;
             theme.track = builder;
             theme.cars = racers;
-            theme.windowMaterials = buildingMats;
+            theme.windowMaterials = facadeMats;
             theme.lampHeadMaterial = lampHead;
             theme.day = new ThemeSettings
             {
                 skybox = skyDay,
+                reflection = dayCube,
                 sunColor = sun.color,
                 sunIntensity = sun.intensity,
                 sunEuler = sun.transform.eulerAngles,
@@ -264,8 +295,11 @@ namespace Racing.EditorTools
             theme.night = new ThemeSettings
             {
                 skybox = skyNight,
+                reflection = nightCube,
+                ambientIntensity = 0.65f,
+                reflectionIntensity = 0.5f,
                 sunColor = new Color(0.55f, 0.65f, 1f),
-                sunIntensity = 0.22f,
+                sunIntensity = 0.12f,
                 sunEuler = new Vector3(35f, 150f, 0f),
                 ambientSky = new Color(0.1f, 0.12f, 0.22f),
                 ambientEquator = new Color(0.08f, 0.08f, 0.12f),
@@ -273,7 +307,7 @@ namespace Racing.EditorTools
                 fogColor = new Color(0.04f, 0.05f, 0.09f),
                 fogStart = 120f,
                 fogEnd = 800f,
-                windowGlow = new Color(1.3f, 1.2f, 1.05f),
+                windowGlow = new Color(1.4f, 1.35f, 1.25f),
                 lampGlow = new Color(1f, 0.85f, 0.6f) * 4f,
                 lightsOn = true,
             };
@@ -318,6 +352,8 @@ namespace Racing.EditorTools
             model.name = "Model";
             model.transform.SetParent(body.transform, false);
 
+            var paint = Mat("CarPaint", Color.white, 0.72f, 0.25f, AssetDatabase.LoadAssetAtPath<Texture2D>(KenneyCars + "Textures/colormap.png"));
+            foreach (var r in model.GetComponentsInChildren<Renderer>()) r.sharedMaterial = paint;
             var bodyMesh = model.transform.Find("body").GetComponent<Renderer>();
             float scale = 4.3f / bodyMesh.bounds.size.z;
             model.transform.localScale = Vector3.one * scale;
@@ -374,17 +410,6 @@ namespace Racing.EditorTools
             return racer;
         }
 
-        static GameObject[] LoadModels(string dir, string prefix, string letters)
-        {
-            var list = new System.Collections.Generic.List<GameObject>();
-            foreach (char c in letters)
-            {
-                var g = AssetDatabase.LoadAssetAtPath<GameObject>(dir + prefix + c + ".fbx");
-                if (g) list.Add(g);
-            }
-            return list.ToArray();
-        }
-
         // Area-weighted most common saturated colour of a mesh on its palette texture (the car's paint).
         static Color DominantColor(Renderer renderer, string palettePath)
         {
@@ -420,23 +445,74 @@ namespace Racing.EditorTools
             return avg;
         }
 
-        // Emission map for the city palette: only the light-blue window-glass swatch glows.
-        static Texture2D CityWindowGlow(string palettePath, string outPath)
+        // PBR material from an ambientCG folder: Color, NormalGL and (if present) Emission maps.
+        static Material PbrMat(string name, string id, Color tint, float smoothness, float metallic)
+        {
+            string dir = AmbientCG + id + "/" + id;
+            var m = Mat(name, tint, smoothness, metallic, AssetDatabase.LoadAssetAtPath<Texture2D>(dir + "_Color.jpg"));
+            var normal = NormalMap(dir + "_NormalGL.jpg");
+            if (normal)
+            {
+                m.SetTexture("_BumpMap", normal);
+                m.SetFloat("_BumpScale", 1f);
+                m.EnableKeyword("_NORMALMAP");
+            }
+            var emission = AssetDatabase.LoadAssetAtPath<Texture2D>(dir + "_Emission.jpg");
+            if (!emission && id.StartsWith("Facade")) emission = LitWindows(dir + "_Color.jpg", TexDir + "/" + id + "_LitWindows.png");
+            if (emission) EnableEmission(m, emission);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        static Material PropMat(string name, string id, float smoothness, float metallic)
+        {
+            string dir = PolyHaven + "Props/" + id + "/" + id;
+            var m = Mat(name, Color.white, smoothness, metallic, AssetDatabase.LoadAssetAtPath<Texture2D>(dir + "_diff_1k.jpg"));
+            var normal = NormalMap(dir + "_nor_gl_1k.exr");
+            if (normal)
+            {
+                m.SetTexture("_BumpMap", normal);
+                m.EnableKeyword("_NORMALMAP");
+            }
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        // Night-time window glow for a facade photo without an emission map: glass (the darker pixels)
+        // inside a random ~35% of grid cells lights up warm or cool.
+        static Texture2D LitWindows(string colorPath, string outPath)
         {
             if (!File.Exists(outPath))
             {
                 var src = new Texture2D(2, 2);
-                src.LoadImage(File.ReadAllBytes(palettePath));
-                int w = src.width, h = src.height;
-                var dst = new Texture2D(w, h, TextureFormat.RGB24, false);
-                for (int y = 0; y < h; y++)
-                for (int x = 0; x < w; x++)
+                src.LoadImage(File.ReadAllBytes(colorPath));
+                const int size = 1024, cellsX = 16, cellsY = 12;
+                var lum = new float[size * size];
+                var sorted = new float[size * size];
+                for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
                 {
-                    // Glass swatch: columns 10-11 of 16, palette row 1 (image rows 128-255 from the top).
-                    int imgY = h - 1 - y;
-                    bool glass = x >= w * 10 / 16 && x < w * 12 / 16 && imgY >= h / 4 && imgY < h / 2;
-                    Color c = src.GetPixel(x, y);
-                    dst.SetPixel(x, y, glass ? new Color(1f, 0.82f, 0.55f) * (0.55f + 0.45f * c.grayscale) : Color.black);
+                    float l = src.GetPixelBilinear((x + 0.5f) / size, (y + 0.5f) / size).grayscale;
+                    lum[y * size + x] = l;
+                    sorted[y * size + x] = l;
+                }
+                System.Array.Sort(sorted);
+                float glassBelow = sorted[sorted.Length * 45 / 100];
+                var rng = new System.Random(colorPath.Length * 31);
+                var cellGlow = new Color[cellsX * cellsY];
+                for (int i = 0; i < cellGlow.Length; i++)
+                {
+                    double r = rng.NextDouble();
+                    cellGlow[i] = r < 0.22 ? new Color(0.75f, 0.6f, 0.38f) : r < 0.32 ? new Color(0.55f, 0.62f, 0.7f) : Color.black;
+                }
+                var dst = new Texture2D(size, size, TextureFormat.RGB24, false);
+                for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float l = lum[y * size + x];
+                    float glass = Mathf.Clamp01((glassBelow - l) / 0.15f + 0.5f);
+                    Color c = cellGlow[(y * cellsY / size) * cellsX + x * cellsX / size];
+                    dst.SetPixel(x, y, c * glass);
                 }
                 File.WriteAllBytes(outPath, dst.EncodeToPNG());
                 Object.DestroyImmediate(src);
@@ -444,6 +520,89 @@ namespace Racing.EditorTools
                 AssetDatabase.ImportAsset(outPath);
             }
             return AssetDatabase.LoadAssetAtPath<Texture2D>(outPath);
+        }
+
+        static Texture2D NormalMap(string path)
+        {
+            var imp = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (!imp) return null;
+            if (imp.textureType != TextureImporterType.NormalMap)
+            {
+                imp.textureType = TextureImporterType.NormalMap;
+                imp.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        static GameObject Model(string path) => AssetDatabase.LoadAssetAtPath<GameObject>(path);
+
+        static Cubemap Hdri(string file)
+        {
+            string path = PolyHaven + "HDRI/" + file;
+            var imp = (TextureImporter)AssetImporter.GetAtPath(path);
+            if (imp.textureShape != TextureImporterShape.TextureCube)
+            {
+                imp.textureShape = TextureImporterShape.TextureCube;
+                imp.generateCubemap = TextureImporterGenerateCubemap.AutoCubemap;
+                imp.mipmapEnabled = true;
+                imp.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Cubemap>(path);
+        }
+
+        static Material CubeSkybox(string name, Cubemap cube, float exposure, float rotation)
+        {
+            string p = $"{MatDir}/{name}.mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(p);
+            if (m && m.shader.name != "Skybox/Cubemap") { AssetDatabase.DeleteAsset(p); m = null; }
+            if (!m)
+            {
+                m = new Material(Shader.Find("Skybox/Cubemap")) { name = name };
+                AssetDatabase.CreateAsset(m, p);
+            }
+            m.SetTexture("_Tex", cube);
+            m.SetFloat("_Exposure", exposure);
+            m.SetFloat("_Rotation", rotation);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        // Filmic look: ACES tonemapping, light bloom, gentle contrast/saturation, vignette and motion blur.
+        static VolumeProfile RealisticProfile()
+        {
+            string path = Root + "/Settings/RealisticProfile.asset";
+            Directory.CreateDirectory(Root + "/Settings");
+            AssetDatabase.DeleteAsset(path);
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            AssetDatabase.CreateAsset(profile, path);
+
+            var tone = Add<Tonemapping>(profile);
+            tone.mode.Override(TonemappingMode.ACES);
+            var bloom = Add<Bloom>(profile);
+            bloom.threshold.Override(1.1f);
+            bloom.intensity.Override(0.35f);
+            bloom.scatter.Override(0.65f);
+            var color = Add<ColorAdjustments>(profile);
+            color.postExposure.Override(0.25f);
+            color.contrast.Override(12f);
+            color.saturation.Override(6f);
+            var vignette = Add<Vignette>(profile);
+            vignette.intensity.Override(0.22f);
+            vignette.smoothness.Override(0.45f);
+            var blur = Add<MotionBlur>(profile);
+            blur.intensity.Override(0.18f);
+            var wb = Add<WhiteBalance>(profile);
+            wb.temperature.Override(4f);
+            AssetDatabase.SaveAssets();
+            return profile;
+        }
+
+        static T Add<T>(VolumeProfile profile) where T : VolumeComponent
+        {
+            var c = profile.Add<T>(true);
+            c.name = typeof(T).Name;
+            AssetDatabase.AddObjectToAsset(c, profile);
+            return c;
         }
 
         static GameObject Part(GameObject parent, string name, PrimitiveType type, Vector3 pos, Vector3 scale, Material mat)
@@ -544,18 +703,6 @@ namespace Racing.EditorTools
                 AssetDatabase.ImportAsset(p);
             }
             return AssetDatabase.LoadAssetAtPath<Texture2D>(p);
-        }
-
-        static Material Skybox(string name, Color tint, Color groundColor, float exposure, float atmosphere, float sunSize)
-        {
-            var m = GetOrCreate(name, "Skybox/Procedural");
-            m.SetColor("_SkyTint", tint);
-            m.SetColor("_GroundColor", groundColor);
-            m.SetFloat("_Exposure", exposure);
-            m.SetFloat("_AtmosphereThickness", atmosphere);
-            m.SetFloat("_SunSize", sunSize);
-            EditorUtility.SetDirty(m);
-            return m;
         }
 
         // Emission is driven at runtime by ThemeController; enable the keyword so the variant ships.
