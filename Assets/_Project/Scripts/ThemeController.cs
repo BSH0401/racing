@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace Racing
 {
@@ -12,6 +14,8 @@ namespace Racing
         [Tooltip("HDRI cubemap used for reflections (and, with skybox ambient, for lighting).")]
         public Cubemap reflection;
         public float ambientIntensity = 1f;
+        [Tooltip("Post-processing exposure (EV) for this time of day.")]
+        public float postExposure = 0.25f;
         public float reflectionIntensity = 1f;
         public Color sunColor = Color.white;
         public float sunIntensity = 1f;
@@ -30,6 +34,7 @@ namespace Racing
         const string PrefKey = "theme";
 
         public Light sun;
+        public Volume volume;
         public TrackBuilder track;
         public Racer[] cars;
         public Material[] windowMaterials = new Material[0];
@@ -54,8 +59,8 @@ namespace Racing
                 l.type = LightType.Spot;
                 l.spotAngle = 120f;
                 l.innerSpotAngle = 60f;
-                l.range = 34f;
-                l.intensity = 140f;
+                l.range = 42f;
+                l.intensity = 240f;
                 l.color = new Color(1f, 0.82f, 0.55f);
                 l.shadows = LightShadows.None;
                 streetLights.Add(l);
@@ -70,8 +75,8 @@ namespace Racing
                 l.type = LightType.Spot;
                 l.spotAngle = 70f;
                 l.innerSpotAngle = 35f;
-                l.range = 55f;
-                l.intensity = car.isPlayer ? 120f : 70f;
+                l.range = 70f;
+                l.intensity = car.isPlayer ? 200f : 120f;
                 l.color = new Color(1f, 0.96f, 0.85f);
                 l.shadows = LightShadows.None;
                 headLights.Add(l);
@@ -101,6 +106,7 @@ namespace Racing
             sun.intensity = s.sunIntensity;
             sun.transform.rotation = Quaternion.Euler(s.sunEuler);
             RenderSettings.ambientIntensity = s.ambientIntensity;
+            if (volume && volume.profile.TryGet(out ColorAdjustments color)) color.postExposure.value = s.postExposure;
             RenderSettings.reflectionIntensity = s.reflectionIntensity;
             RenderSettings.ambientSkyColor = s.ambientSky;
             RenderSettings.ambientEquatorColor = s.ambientEquator;

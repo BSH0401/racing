@@ -134,6 +134,8 @@ namespace Racing
                     string time = r.finished ? UIKit.FormatTime(r.finishTime) : "racing...";
                     rb.Append($"{r.position}.  <color=#{r.ColorHex}>■</color>  {name}   {time}   best {UIKit.FormatLap(r.bestLap)}\n");
                 }
+                if (race.LastPrize > 0)
+                    rb.Append($"\n<color=#ffd23a><b>+{race.LastPrize:N0} CR</b></color>    credits {Garage.Credits:N0} CR  ·  spend them in the GARAGE\n");
                 resultBody.text = rb.ToString();
             }
         }

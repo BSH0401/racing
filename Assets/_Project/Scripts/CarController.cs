@@ -8,6 +8,9 @@ namespace Racing
     [RequireComponent(typeof(Rigidbody))]
     public class CarController : MonoBehaviour
     {
+        [Tooltip("Garage car model this body/spec comes from (see Garage.Cars).")]
+        public string carId;
+
         [Header("Wheels (FL, FR, RL, RR)")]
         public Transform[] wheelVisuals = new Transform[4];
         public Vector3[] wheelAnchors =
@@ -83,6 +86,15 @@ namespace Racing
         float wheelSpin;
         int groundMask;
         Vector3 lastVelocity, smoothedAccel;
+
+        public void ApplySpec(CarSpec spec)
+        {
+            maxSpeed = spec.maxSpeed;
+            acceleration = spec.acceleration;
+            tireGrip = spec.tireGrip;
+            rearDriveShare = spec.rearDriveShare;
+            GetComponent<Rigidbody>().mass = spec.mass;
+        }
 
         void Awake()
         {

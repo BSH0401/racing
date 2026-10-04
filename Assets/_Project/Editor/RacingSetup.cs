@@ -84,7 +84,7 @@ namespace Racing.EditorTools
         [MenuItem("Racing/Setup Scene")]
         public static void SetupScene()
         {
-            AssetDatabase.DeleteAsset(CarMeshDir); // regenerated wheel/body splits; drop stale ones
+            savedMeshes.Clear();
             foreach (var d in new[] { MatDir, TexDir, Root + "/Scenes" }) Directory.CreateDirectory(d);
             AssetDatabase.Refresh();
 
@@ -130,7 +130,7 @@ namespace Racing.EditorTools
             var dayCube = Hdri("kloofendal_48d_partly_cloudy_puresky_2k.hdr");
             var nightCube = Hdri("rogland_clear_night_2k.hdr");
             var skyDay = CubeSkybox("SkyDay", dayCube, 1f, 0f);
-            var skyNight = CubeSkybox("SkyNight", nightCube, 0.6f, 0f);
+            var skyNight = CubeSkybox("SkyNight", nightCube, 0.9f, 0f);
 
             var carPhysics = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(MatDir + "/CarBody.physicMaterial");
             if (!carPhysics)
@@ -275,6 +275,7 @@ namespace Racing.EditorTools
 
             var theme = rmGo.AddComponent<ThemeController>();
             theme.sun = sun;
+            theme.volume = vol;
             theme.track = builder;
             theme.cars = racers;
             theme.windowMaterials = facadeMats;
@@ -300,15 +301,16 @@ namespace Racing.EditorTools
             {
                 skybox = skyNight,
                 reflection = nightCube,
-                ambientIntensity = 0.65f,
-                reflectionIntensity = 0.5f,
-                sunColor = new Color(0.55f, 0.65f, 1f),
-                sunIntensity = 0.12f,
+                ambientIntensity = 1.5f,
+                reflectionIntensity = 0.8f,
+                postExposure = 0.9f,
+                sunColor = new Color(0.6f, 0.7f, 1f),
+                sunIntensity = 0.35f,
                 sunEuler = new Vector3(35f, 150f, 0f),
-                ambientSky = new Color(0.1f, 0.12f, 0.22f),
-                ambientEquator = new Color(0.08f, 0.08f, 0.12f),
-                ambientGround = new Color(0.04f, 0.04f, 0.05f),
-                fogColor = new Color(0.04f, 0.05f, 0.09f),
+                ambientSky = new Color(0.16f, 0.19f, 0.32f),
+                ambientEquator = new Color(0.13f, 0.13f, 0.18f),
+                ambientGround = new Color(0.07f, 0.07f, 0.08f),
+                fogColor = new Color(0.07f, 0.08f, 0.13f),
                 fogStart = 120f,
                 fogEnd = 800f,
                 windowGlow = new Color(1.4f, 1.35f, 1.25f),
@@ -319,6 +321,12 @@ namespace Racing.EditorTools
             rm.minimapCamera = mini;
             rmGo.AddComponent<MainMenu>().race = rm;
 
+            // Split car meshes are overwritten in place (stable GUIDs); drop ones no longer produced.
+            foreach (var guid in AssetDatabase.FindAssets("t:Mesh", new[] { CarMeshDir }))
+            {
+                string meshPath = AssetDatabase.GUIDToAssetPath(guid);
+                if (!savedMeshes.Contains(meshPath)) AssetDatabase.DeleteAsset(meshPath);
+            }
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
 
@@ -401,6 +409,8 @@ namespace Racing.EditorTools
 
             var car = go.AddComponent<CarController>();
             car.bodyVisual = body.transform;
+            car.carId = modelId;
+            car.ApplySpec(Garage.Find(modelId));
             car.wheelRadius = meta.radius;
             float sag = car.suspensionRest - 0.09f;
             float wheelY = meta.wheels[0][1];
@@ -570,9 +580,12 @@ namespace Racing.EditorTools
             }
         }
 
+        static readonly System.Collections.Generic.HashSet<string> savedMeshes = new System.Collections.Generic.HashSet<string>();
+
         static Mesh SaveMesh(Mesh mesh)
         {
             string path = CarMeshDir + "/" + mesh.name + ".asset";
+            savedMeshes.Add(path);
             var existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);
             if (existing)
             {

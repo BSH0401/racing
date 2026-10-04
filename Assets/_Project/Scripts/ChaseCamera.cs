@@ -13,7 +13,16 @@ namespace Racing
         public float height = 2.6f;
         public float lookAhead = 5f;
         public float follow = 7f;
+
+        [Header("Free look (mouse / right stick)")]
+        public float mouseSensitivity = 0.15f;
+        public float stickSpeed = 140f;
+        [Tooltip("Seconds without look input before the camera swings back behind the car.")]
+        public float recenterDelay = 1.2f;
+        public float recenterSpeed = 3f;
         [System.NonSerialized] public bool cinematic;
+        [Tooltip("While set (garage screen), the cinematic camera slowly circles this car.")]
+        [System.NonSerialized] public Transform showcase;
 
         enum Shot { Trackside, Aerial, FrontLow, Orbit, Chase }
 
@@ -25,15 +34,49 @@ namespace Racing
         Racer subject;
         Vector3 fixedPos;
         float orbitAngle;
+        float lookYaw, lookPitch, lookIdle;
 
-        void Awake() => cam = GetComponent<Camera>();
+        void Awake()
+        {
+            cam = GetComponent<Camera>();
+            // Dev: -lookyaw N holds the free-look camera N degrees round (screenshots of the orbit).
+            if (DevFlags.Has("-lookyaw")) { devLookYaw = DevFlags.GetFloat("-lookyaw", 0f); recenterDelay = float.MaxValue; }
+        }
+
+        float devLookYaw;
 
         void Update()
         {
+            var rm = RaceManager.Instance;
+            // Mouse look while driving: hide and lock the cursor; menus, pause and results get it back.
+            bool driving = !cinematic && rm && (rm.State == RaceState.Countdown || rm.State == RaceState.Racing) && !rm.Paused && !rm.Transitioning;
+            var wantLock = driving ? CursorLockMode.Locked : CursorLockMode.None;
+            if (Cursor.lockState != wantLock) { Cursor.lockState = wantLock; Cursor.visible = !driving; }
             if (cinematic) return;
+
             var kb = Keyboard.current;
             var gp = Gamepad.current;
             if ((kb != null && kb.cKey.wasPressedThisFrame) || (gp != null && gp.rightShoulder.wasPressedThisFrame)) near = !near;
+
+            Vector2 look = Vector2.zero;
+            if (driving && Mouse.current != null) look += Mouse.current.delta.ReadValue() * mouseSensitivity;
+            if (gp != null) look += gp.rightStick.ReadValue() * stickSpeed * Time.unscaledDeltaTime;
+            if (look.sqrMagnitude > 0.0001f)
+            {
+                lookYaw = Mathf.Repeat(lookYaw + look.x + 180f, 360f) - 180f;
+                lookPitch = Mathf.Clamp(lookPitch - look.y, -12f, 55f);
+                lookIdle = 0f;
+            }
+            else
+            {
+                lookIdle += Time.unscaledDeltaTime;
+                if (lookIdle > recenterDelay)
+                {
+                    float k = 1f - Mathf.Exp(-recenterSpeed * Time.unscaledDeltaTime);
+                    lookYaw = Mathf.LerpAngle(lookYaw, 0f, k);
+                    lookPitch = Mathf.Lerp(lookPitch, 0f, k);
+                }
+            }
         }
 
         void LateUpdate()
@@ -46,6 +89,8 @@ namespace Racing
         public void Snap()
         {
             shotTimer = 0f;
+            lookYaw = devLookYaw;
+            lookPitch = 0f;
             if (target && !cinematic) Place(1f, true);
         }
 
@@ -57,14 +102,19 @@ namespace Racing
             if (fwd.sqrMagnitude < 0.001f) fwd = Vector3.forward;
             float targetYaw = Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
             yaw = snap ? targetYaw : Mathf.LerpAngle(yaw, targetYaw, t);
-            Vector3 dir = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+            Vector3 dir = Quaternion.Euler(0f, yaw + lookYaw, 0f) * Vector3.forward;
 
             float speed = target.linearVelocity.magnitude;
             float dist = (near ? distance * 0.65f : distance) + speed * 0.03f;
             float h = near ? height * 0.7f : height;
-            Vector3 desired = tr.position - dir * dist + Vector3.up * h;
-            transform.position = snap ? desired : Vector3.Lerp(transform.position, desired, Mathf.Clamp01(t * 2f));
-            Vector3 look = tr.position + dir * lookAhead + Vector3.up * 0.9f;
+            // Free look orbits the car; the further round, the more the camera looks at the car itself.
+            float pitch = lookPitch * Mathf.Deg2Rad;
+            Vector3 desired = tr.position - dir * dist * Mathf.Cos(pitch) + Vector3.up * (h + dist * Mathf.Sin(pitch));
+            // Follow rigidly while looking around so the orbit doesn't lag behind the mouse.
+            float rigid = Mathf.Clamp01(Mathf.Max(Mathf.Abs(lookYaw), Mathf.Abs(lookPitch)) / 10f);
+            transform.position = snap ? desired : Vector3.Lerp(transform.position, desired, Mathf.Lerp(Mathf.Clamp01(t * 2f), 1f, rigid));
+            float ahead = lookAhead * Mathf.Clamp01(1f - Mathf.Abs(lookYaw) / 45f);
+            Vector3 look = tr.position + dir * ahead + Vector3.up * 0.9f;
             transform.rotation = Quaternion.LookRotation(look - transform.position);
 
             cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, 60f + Mathf.Clamp01(speed / 55f) * 14f, snap ? 1f : t);
@@ -76,6 +126,21 @@ namespace Racing
             if (!rm || rm.racers.Length == 0) return;
             var track = rm.track;
             float dt = Time.unscaledDeltaTime;
+
+            if (showcase)
+            {
+                // Garage: circle the player's car from the right-hand side so the menu panel doesn't hide it.
+                orbitAngle += dt * 18f;
+                Vector3 c = showcase.position + Vector3.up * 0.6f;
+                Vector3 dir = Quaternion.AngleAxis(orbitAngle, Vector3.up) * showcase.forward;
+                transform.position = c + dir * 6.5f + Vector3.up * 1.4f;
+                transform.rotation = Quaternion.LookRotation(c - transform.position);
+                // Shift the car into the free right part of the screen.
+                transform.position -= transform.right * 1.8f;
+                cam.fieldOfView = 45f;
+                shotTimer = 0f;
+                return;
+            }
 
             shotTimer -= dt;
             if (shotTimer <= 0f || !subject)

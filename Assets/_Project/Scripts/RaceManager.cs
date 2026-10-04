@@ -32,6 +32,7 @@ namespace Racing
         public float Countdown { get; private set; }
         public bool Paused { get; private set; }
         public Racer Player { get; private set; }
+        public int LastPrize { get; private set; }
         public bool Transitioning { get; private set; }
 
         // Checkpoints are route samples spaced ~110 m apart; index 0 is the start/finish line.
@@ -74,6 +75,9 @@ namespace Racing
             }
 
             foreach (var r in racers) if (r.isPlayer) Player = r;
+            // The player's chosen garage car (dev: -car <id> forces any car).
+            string forced = DevFlags.Get("-car");
+            if (Player) Garage.Equip(Player, racers, string.IsNullOrEmpty(forced) ? Garage.Selected : forced);
             int cpCount = Mathf.Max(8, Mathf.RoundToInt(track.Length / 110f));
             checkpoints = new int[cpCount];
             for (int k = 0; k < cpCount; k++) checkpoints[k] = track.Wrap(track.StartIndex + Mathf.RoundToInt(k * track.Count / (float)cpCount));
@@ -163,6 +167,7 @@ namespace Racing
             State = RaceState.Countdown;
             Countdown = 3f;
             RaceTime = 0f;
+            LastPrize = 0;
 
             // Player starts at the back of the grid.
             int slot = 0;
@@ -401,6 +406,12 @@ namespace Racing
             UpdateStandings();
             hud.Flash("FINISH!", 2f);
             if (!autopilot && (BestFinishRecord == 0 || r.position < BestFinishRecord)) PlayerPrefs.SetInt("bestFinish", r.position);
+            if (!autopilot)
+            {
+                LastPrize = Garage.Prize(r.position, laps);
+                Garage.Credits += LastPrize;
+                PlayerPrefs.Save();
+            }
         }
 
         // Records only count when a human is driving.
