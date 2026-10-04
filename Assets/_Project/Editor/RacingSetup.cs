@@ -16,6 +16,8 @@ namespace Racing.EditorTools
         const string ScenePath = Root + "/Scenes/Race.unity";
         const int MinimapLayer = 31;
         const int CityLayer = 30;
+        const string KenneyCars = Root + "/ThirdParty/Kenney/Cars/";
+        const string KenneyCity = Root + "/ThirdParty/Kenney/City/";
 
         // Race route through the open city, as street-grid intersections (see CityLayout).
         // Starts on the long northbound avenue at x = 1 and loops clockwise over the big hill.
@@ -53,14 +55,16 @@ namespace Racing.EditorTools
 
         static Vector3 V3(Vector2 v) => new Vector3(v.x, 0f, v.y);
 
-        static readonly (string name, Color color, float skill)[] Drivers =
+        // AI drivers and their Kenney Car Kit models; the player drives the sports sedan.
+        static readonly (string name, string model, float skill)[] Drivers =
         {
-            ("Blaze", new Color(0.15f, 0.45f, 0.95f), 0.95f),
-            ("Viper", new Color(0.1f, 0.75f, 0.3f), 0.93f),
-            ("Nova", new Color(0.95f, 0.8f, 0.1f), 0.91f),
-            ("Rook", new Color(0.6f, 0.25f, 0.85f), 0.89f),
-            ("Ember", new Color(1f, 0.5f, 0.1f), 0.87f),
+            ("Blaze", "hatchback-sports", 0.95f),
+            ("Viper", "sedan", 0.93f),
+            ("Nova", "taxi", 0.91f),
+            ("Rook", "police", 0.89f),
+            ("Ember", "suv-luxury", 0.87f),
         };
+        const string PlayerModel = "sedan-sports";
 
         [MenuItem("Racing/Setup Scene")]
         public static void SetupScene()
@@ -72,7 +76,6 @@ namespace Racing.EditorTools
 
             var asphaltTex = NoiseTexture("Asphalt", 0.82f, 1f, 3);
             var concreteTex = NoiseTexture("Concrete", 0.85f, 1f, 9);
-            var (windowTex, windowLit) = WindowTextures("Windows", 11);
 
             var grassTex = NoiseTexture("Grass", 0.8f, 1f, 5);
             var road = Mat("Road", new Color(0.28f, 0.28f, 0.3f), 0.25f, 0f, asphaltTex);
@@ -90,25 +93,22 @@ namespace Racing.EditorTools
             var beam = TransparentMat("CheckpointBeam", new Color(1f, 0.8f, 0.1f, 0.35f));
             var routeLine = UnlitMat("RouteLine", new Color(1f, 0.78f, 0.1f));
             var blip = UnlitMat("CheckpointBlip", new Color(1f, 0.45f, 0.05f));
-            var roofMat = Mat("Roof", new Color(0.3f, 0.3f, 0.32f), 0.1f, 0f, concreteTex);
             var lampPole = Mat("LampPole", new Color(0.25f, 0.27f, 0.3f), 0.5f, 0.6f);
             var lampHead = Mat("LampHead", new Color(1f, 0.95f, 0.8f), 0.6f);
             EnableEmission(lampHead, null);
-            var facades = new[]
+            var cityMap = AssetDatabase.LoadAssetAtPath<Texture2D>(KenneyCity + "Textures/colormap.png");
+            var cityGlow = CityWindowGlow(KenneyCity + "Textures/colormap.png", TexDir + "/CityWindowsLit.png");
+            var buildingMats = new[]
             {
-                Mat("FacadeConcrete", new Color(0.78f, 0.77f, 0.74f), 0.3f, 0f, windowTex),
-                Mat("FacadeGlass", new Color(0.55f, 0.7f, 0.85f), 0.85f, 0.4f, windowTex),
-                Mat("FacadeBrick", new Color(0.66f, 0.38f, 0.3f), 0.15f, 0f, windowTex),
-                Mat("FacadeSand", new Color(0.86f, 0.78f, 0.6f), 0.2f, 0f, windowTex),
-                Mat("FacadeSlate", new Color(0.42f, 0.46f, 0.52f), 0.5f, 0.2f, windowTex),
+                Mat("CityWhite", new Color(1f, 1f, 1f), 0.35f, 0f, cityMap),
+                Mat("CityWarm", new Color(1f, 0.92f, 0.8f), 0.35f, 0f, cityMap),
+                Mat("CityCool", new Color(0.82f, 0.86f, 0.93f), 0.35f, 0f, cityMap),
+                Mat("CityRose", new Color(1f, 0.85f, 0.82f), 0.35f, 0f, cityMap),
+                Mat("CitySlate", new Color(0.7f, 0.72f, 0.76f), 0.35f, 0f, cityMap),
             };
-            foreach (var f in facades) EnableEmission(f, windowLit);
+            foreach (var m in buildingMats) EnableEmission(m, cityGlow);
             var skyDay = Skybox("SkyDay", new Color(0.5f, 0.5f, 0.5f), new Color(0.37f, 0.35f, 0.33f), 1.3f, 1f, 0.04f);
             var skyNight = Skybox("SkyNight", new Color(0.18f, 0.22f, 0.45f), new Color(0.02f, 0.02f, 0.03f), 0.12f, 0.45f, 0.02f);
-            var tire = Mat("Tire", new Color(0.08f, 0.08f, 0.08f), 0.2f);
-            var glass = Mat("Glass", new Color(0.08f, 0.1f, 0.14f), 0.9f);
-            var headlight = Mat("Headlight", new Color(1f, 0.95f, 0.75f), 0.8f, 0f, null, new Color(1f, 0.95f, 0.7f) * 2f);
-            var taillight = Mat("Taillight", new Color(0.8f, 0.05f, 0.05f), 0.8f, 0f, null, new Color(1f, 0.05f, 0.05f) * 1.5f);
 
             var carPhysics = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(MatDir + "/CarBody.physicMaterial");
             if (!carPhysics)
@@ -178,23 +178,23 @@ namespace Racing.EditorTools
             builder.banner = curbRed;
             builder.trunk = trunk;
             builder.leaves = leaves;
-            builder.roof = roofMat;
+            builder.buildingPrefabs = LoadModels(KenneyCity, "building-", "abcdefghijklmn");
+            builder.skyscraperPrefabs = LoadModels(KenneyCity, "building-skyscraper-", "abcde");
+            builder.buildingMaterials = buildingMats;
             builder.lampPole = lampPole;
             builder.lampHead = lampHead;
-            builder.facades = facades;
             builder.cityLayer = CityLayer;
             builder.Build();
 
             // Cars.
-            var parts = new CarParts { tire = tire, glass = glass, dark = black, headlight = headlight, taillight = taillight, physics = carPhysics };
             var racers = new Racer[Drivers.Length + 1];
             for (int i = 0; i < Drivers.Length; i++)
             {
                 var d = Drivers[i];
-                racers[i] = CreateCar(d.name, d.color, false, parts);
+                racers[i] = CreateCar(d.name, d.model, false, carPhysics);
                 racers[i].GetComponent<AIDriver>().skill = d.skill;
             }
-            racers[Drivers.Length] = CreateCar("You", new Color(0.9f, 0.08f, 0.1f), true, parts);
+            racers[Drivers.Length] = CreateCar("You", PlayerModel, true, carPhysics);
 
             // Cameras.
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
@@ -243,7 +243,7 @@ namespace Racing.EditorTools
             theme.sun = sun;
             theme.track = builder;
             theme.cars = racers;
-            theme.windowMaterials = facades;
+            theme.windowMaterials = buildingMats;
             theme.lampHeadMaterial = lampHead;
             theme.day = new ThemeSettings
             {
@@ -273,7 +273,7 @@ namespace Racing.EditorTools
                 fogColor = new Color(0.04f, 0.05f, 0.09f),
                 fogStart = 120f,
                 fogEnd = 800f,
-                windowGlow = new Color(1.6f, 1.5f, 1.3f),
+                windowGlow = new Color(1.3f, 1.2f, 1.05f),
                 lampGlow = new Color(1f, 0.85f, 0.6f) * 4f,
                 lightsOn = true,
             };
@@ -291,21 +291,17 @@ namespace Racing.EditorTools
             PlayerSettings.defaultScreenHeight = 900;
             PlayerSettings.resizableWindow = true;
             PlayerSettings.runInBackground = true;
+            // D3D12 intermittently crashes in D3D12Core.dll while the player shuts down; D3D11 is stable.
+            PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneWindows64, false);
+            PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneWindows64, new[] { GraphicsDeviceType.Direct3D11 });
             AssetDatabase.SaveAssets();
             Debug.Log("[Racing] Scene set up: " + ScenePath + ", route length " + path.Length.ToString("F0") + " m");
         }
 
-        class CarParts
+        // Builds a racer from a Kenney Car Kit model: the body goes under a tilting pivot, the four wheel
+        // nodes move to suspension pivots, and wheel size/positions and the collider come from the model.
+        static Racer CreateCar(string name, string modelName, bool player, PhysicsMaterial physics)
         {
-            public Material tire, glass, dark, headlight, taillight;
-            public PhysicsMaterial physics;
-        }
-
-        static Racer CreateCar(string name, Color color, bool player, CarParts parts)
-        {
-            var paint = Mat("Paint_" + name, color, 0.75f, 0.2f);
-            var marker = UnlitMat("Marker_" + name, color);
-
             var go = new GameObject(player ? "Car_Player" : "Car_" + name);
             var rb = go.AddComponent<Rigidbody>();
             rb.mass = 1200f;
@@ -314,44 +310,56 @@ namespace Racing.EditorTools
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
-            var box = go.AddComponent<BoxCollider>();
-            box.center = new Vector3(0f, 0.25f, 0f);
-            box.size = new Vector3(1.8f, 0.7f, 4.2f);
-            box.sharedMaterial = parts.physics;
-
-            // Body parts hang off a pivot the controller tilts for roll/pitch.
             var body = new GameObject("BodyVisual");
             body.transform.SetParent(go.transform, false);
-            Part(body, "Body", PrimitiveType.Cube, new Vector3(0f, 0.15f, 0f), new Vector3(1.8f, 0.5f, 4.2f), paint);
-            Part(body, "Nose", PrimitiveType.Cube, new Vector3(0f, 0.05f, 2.05f), new Vector3(1.7f, 0.3f, 0.3f), paint);
-            Part(body, "Cabin", PrimitiveType.Cube, new Vector3(0f, 0.62f, -0.35f), new Vector3(1.45f, 0.45f, 1.9f), parts.glass);
-            Part(body, "Stripe", PrimitiveType.Cube, new Vector3(0f, 0.41f, 1.05f), new Vector3(0.45f, 0.02f, 2f), Mat("White", Color.white, 0.3f));
-            Part(body, "WingL", PrimitiveType.Cube, new Vector3(-0.6f, 0.55f, -1.95f), new Vector3(0.08f, 0.35f, 0.25f), parts.dark);
-            Part(body, "WingR", PrimitiveType.Cube, new Vector3(0.6f, 0.55f, -1.95f), new Vector3(0.08f, 0.35f, 0.25f), parts.dark);
-            Part(body, "Wing", PrimitiveType.Cube, new Vector3(0f, 0.75f, -2f), new Vector3(1.8f, 0.07f, 0.45f), paint);
-            Part(body, "HeadL", PrimitiveType.Cube, new Vector3(-0.6f, 0.2f, 2.1f), new Vector3(0.4f, 0.14f, 0.05f), parts.headlight);
-            Part(body, "HeadR", PrimitiveType.Cube, new Vector3(0.6f, 0.2f, 2.1f), new Vector3(0.4f, 0.14f, 0.05f), parts.headlight);
-            Part(body, "TailL", PrimitiveType.Cube, new Vector3(-0.6f, 0.25f, -2.11f), new Vector3(0.45f, 0.12f, 0.03f), parts.taillight);
-            Part(body, "TailR", PrimitiveType.Cube, new Vector3(0.6f, 0.25f, -2.11f), new Vector3(0.45f, 0.12f, 0.03f), parts.taillight);
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(KenneyCars + modelName + ".fbx");
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            PrefabUtility.UnpackPrefabInstance(model, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            model.name = "Model";
+            model.transform.SetParent(body.transform, false);
+
+            var bodyMesh = model.transform.Find("body").GetComponent<Renderer>();
+            float scale = 4.3f / bodyMesh.bounds.size.z;
+            model.transform.localScale = Vector3.one * scale;
 
             var car = go.AddComponent<CarController>();
             car.bodyVisual = body.transform;
-            string[] wheelNames = { "WheelFL", "WheelFR", "WheelRL", "WheelRR" };
+            string[] nodes = { "wheel-front-left", "wheel-front-right", "wheel-back-left", "wheel-back-right" };
+            var wheelNodes = new Transform[4];
+            for (int i = 0; i < 4; i++) wheelNodes[i] = model.transform.Find(nodes[i]);
+            float sag = car.suspensionRest - 0.09f;
+            float wheelY = wheelNodes[0].localPosition.y * scale;
+            model.transform.localPosition = new Vector3(0f, -sag - wheelY, 0f);
+            car.wheelRadius = wheelNodes[0].GetComponent<Renderer>().bounds.extents.y;
+
+            var anchors = new Vector3[4];
             for (int i = 0; i < 4; i++)
             {
-                var pivot = new GameObject(wheelNames[i]).transform;
+                Vector3 lp = wheelNodes[i].localPosition * scale;
+                anchors[i] = new Vector3(lp.x, 0f, lp.z);
+                var pivot = new GameObject(nodes[i]).transform;
                 pivot.SetParent(go.transform, false);
-                pivot.localPosition = car.wheelAnchors[i] - Vector3.up * (car.suspensionRest - 0.09f);
-                var tireGo = Part(pivot.gameObject, "Tire", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.72f, 0.15f, 0.72f), parts.tire);
-                tireGo.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-                Part(pivot.gameObject, "Hub", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.4f, 0.155f, 0.4f), parts.dark)
-                    .transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                pivot.localPosition = anchors[i] - Vector3.up * sag;
+                wheelNodes[i].SetParent(pivot, true);
+                wheelNodes[i].localPosition = Vector3.zero;
+                wheelNodes[i].localRotation = Quaternion.identity;
                 car.wheelVisuals[i] = pivot;
             }
+            car.wheelAnchors = anchors;
+
+            // Collider from the body (and spoiler) bounds, with the car at the origin.
+            var b = bodyMesh.bounds;
+            foreach (var r in body.GetComponentsInChildren<Renderer>()) b.Encapsulate(r.bounds);
+            var box = go.AddComponent<BoxCollider>();
+            box.center = b.center + Vector3.up * 0.05f;
+            box.size = new Vector3(b.size.x * 0.95f, b.size.y * 0.8f, b.size.z * 0.97f);
+            box.sharedMaterial = physics;
 
             // Cars live on Ignore Raycast so suspension rays skip them.
             foreach (var t in go.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = 2;
 
+            Color color = DominantColor(bodyMesh, KenneyCars + "Textures/colormap.png");
+            var marker = UnlitMat("Marker_" + name, color);
             var mk = Part(go, "MinimapMarker", PrimitiveType.Sphere, new Vector3(0f, 40f, 0f), player ? new Vector3(22f, 1f, 22f) : new Vector3(15f, 1f, 15f), marker);
             mk.layer = MinimapLayer;
 
@@ -364,6 +372,78 @@ namespace Racing.EditorTools
             go.AddComponent<AudioSource>();
             go.AddComponent<CarAudio>().listenerCar = player;
             return racer;
+        }
+
+        static GameObject[] LoadModels(string dir, string prefix, string letters)
+        {
+            var list = new System.Collections.Generic.List<GameObject>();
+            foreach (char c in letters)
+            {
+                var g = AssetDatabase.LoadAssetAtPath<GameObject>(dir + prefix + c + ".fbx");
+                if (g) list.Add(g);
+            }
+            return list.ToArray();
+        }
+
+        // Area-weighted most common saturated colour of a mesh on its palette texture (the car's paint).
+        static Color DominantColor(Renderer renderer, string palettePath)
+        {
+            var tex = new Texture2D(2, 2);
+            tex.LoadImage(File.ReadAllBytes(palettePath));
+            var mesh = renderer.GetComponent<MeshFilter>().sharedMesh;
+            var verts = mesh.vertices;
+            var uvs = mesh.uv;
+            var tris = mesh.triangles;
+            var weights = new System.Collections.Generic.Dictionary<int, float>();
+            var sums = new System.Collections.Generic.Dictionary<int, Color>();
+            for (int i = 0; i < tris.Length; i += 3)
+            {
+                int a = tris[i], b = tris[i + 1], c = tris[i + 2];
+                float area = Vector3.Cross(verts[b] - verts[a], verts[c] - verts[a]).magnitude;
+                Vector2 uv = (uvs[a] + uvs[b] + uvs[c]) / 3f;
+                Color col = tex.GetPixelBilinear(uv.x, uv.y);
+                Color.RGBToHSV(col, out _, out float sat, out float val);
+                if (sat < 0.3f || val < 0.25f) continue;
+                int key = Mathf.RoundToInt(col.r * 7) * 64 + Mathf.RoundToInt(col.g * 7) * 8 + Mathf.RoundToInt(col.b * 7);
+                weights.TryGetValue(key, out float w);
+                weights[key] = w + area;
+                sums.TryGetValue(key, out Color sum);
+                sums[key] = sum + col * area;
+            }
+            Object.DestroyImmediate(tex);
+            int best = -1;
+            float bestW = 0f;
+            foreach (var kv in weights) if (kv.Value > bestW) { bestW = kv.Value; best = kv.Key; }
+            if (best < 0) return Color.white;
+            Color avg = sums[best] / bestW;
+            avg.a = 1f;
+            return avg;
+        }
+
+        // Emission map for the city palette: only the light-blue window-glass swatch glows.
+        static Texture2D CityWindowGlow(string palettePath, string outPath)
+        {
+            if (!File.Exists(outPath))
+            {
+                var src = new Texture2D(2, 2);
+                src.LoadImage(File.ReadAllBytes(palettePath));
+                int w = src.width, h = src.height;
+                var dst = new Texture2D(w, h, TextureFormat.RGB24, false);
+                for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    // Glass swatch: columns 10-11 of 16, palette row 1 (image rows 128-255 from the top).
+                    int imgY = h - 1 - y;
+                    bool glass = x >= w * 10 / 16 && x < w * 12 / 16 && imgY >= h / 4 && imgY < h / 2;
+                    Color c = src.GetPixel(x, y);
+                    dst.SetPixel(x, y, glass ? new Color(1f, 0.82f, 0.55f) * (0.55f + 0.45f * c.grayscale) : Color.black);
+                }
+                File.WriteAllBytes(outPath, dst.EncodeToPNG());
+                Object.DestroyImmediate(src);
+                Object.DestroyImmediate(dst);
+                AssetDatabase.ImportAsset(outPath);
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(outPath);
         }
 
         static GameObject Part(GameObject parent, string name, PrimitiveType type, Vector3 pos, Vector3 scale, Material mat)
@@ -464,44 +544,6 @@ namespace Racing.EditorTools
                 AssetDatabase.ImportAsset(p);
             }
             return AssetDatabase.LoadAssetAtPath<Texture2D>(p);
-        }
-
-        // Facade textures: 8x8 window cells (light frames, dark glass, a few warm windows) plus a
-        // matching emission map where roughly 40% of windows are lit at night.
-        static (Texture2D day, Texture2D lit) WindowTextures(string name, int seed)
-        {
-            string p = $"{TexDir}/{name}.png", pl = $"{TexDir}/{name}Lit.png";
-            if (!File.Exists(p) || !File.Exists(pl))
-            {
-                const int size = 256, cells = 8, cell = size / cells;
-                var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
-                var lit = new Texture2D(size, size, TextureFormat.RGB24, false);
-                var rng = new System.Random(seed);
-                var litRng = new System.Random(seed + 1);
-                for (int cy = 0; cy < cells; cy++)
-                for (int cx = 0; cx < cells; cx++)
-                {
-                    float r = (float)rng.NextDouble();
-                    float lr = (float)litRng.NextDouble();
-                    Color glass = r < 0.12f ? new Color(0.95f, 0.85f, 0.55f) : Color.Lerp(new Color(0.12f, 0.15f, 0.2f), new Color(0.32f, 0.38f, 0.46f), r);
-                    Color glow = r < 0.12f || lr < 0.32f ? Color.Lerp(new Color(1f, 0.78f, 0.45f), new Color(0.75f, 0.85f, 1f), lr) * (0.7f + 0.3f * lr) : Color.black;
-                    for (int y = 0; y < cell; y++)
-                    for (int x = 0; x < cell; x++)
-                    {
-                        bool frame = x < 5 || x >= cell - 5 || y < 7 || y >= cell - 4;
-                        float n = 0.93f + (float)rng.NextDouble() * 0.07f;
-                        tex.SetPixel(cx * cell + x, cy * cell + y, frame ? new Color(n, n, n) : glass);
-                        lit.SetPixel(cx * cell + x, cy * cell + y, frame ? Color.black : glow);
-                    }
-                }
-                File.WriteAllBytes(p, tex.EncodeToPNG());
-                File.WriteAllBytes(pl, lit.EncodeToPNG());
-                Object.DestroyImmediate(tex);
-                Object.DestroyImmediate(lit);
-                AssetDatabase.ImportAsset(p);
-                AssetDatabase.ImportAsset(pl);
-            }
-            return (AssetDatabase.LoadAssetAtPath<Texture2D>(p), AssetDatabase.LoadAssetAtPath<Texture2D>(pl));
         }
 
         static Material Skybox(string name, Color tint, Color groundColor, float exposure, float atmosphere, float sunSize)

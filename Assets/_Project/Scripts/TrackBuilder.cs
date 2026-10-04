@@ -11,8 +11,13 @@ namespace Racing
     [ExecuteAlways, RequireComponent(typeof(TrackPath))]
     public class TrackBuilder : MonoBehaviour
     {
-        public Material road, line, yellowLine, sidewalk, grass, barrier, farGround, checkerBlack, gantry, banner, roof, lampPole, lampHead, trunk, leaves;
-        public Material[] facades = new Material[0];
+        public Material road, line, yellowLine, sidewalk, grass, barrier, farGround, checkerBlack, gantry, banner, lampPole, lampHead, trunk, leaves;
+        [Header("Buildings (Kenney City Kit)")]
+        public GameObject[] buildingPrefabs = new GameObject[0];
+        public GameObject[] skyscraperPrefabs = new GameObject[0];
+        public Material[] buildingMaterials = new Material[0];
+        public float buildingScale = 16f;
+        public float lotSize = 17f;
         public float cell = 2f;
         public int seed = 7;
         public int cityLayer = 30;
@@ -195,19 +200,20 @@ namespace Racing
 
         // ---- Blocks: buildings, plazas and parks ----
 
+        // Each block is split into ~17 m lots; the lots along the block edge get a Kenney building
+        // facing the street, sat on a concrete plinth that hides the slope. Parks get trees instead.
         void BuildBlocks(GameObject root)
         {
             var rng = new System.Random(seed);
             float R() => (float)rng.NextDouble();
             float p = CityLayout.Pitch, inset = CityLayout.RoadHalf + CityLayout.Sidewalk;
             int lines = CityLayout.Lines;
-            int fc = Mathf.Max(1, facades.Length);
-            int roofSub = fc;
-            var mb = new MeshBuilder(fc + 1);
+            var plinths = new MeshBuilder(1);
             var cyl = PrimitiveMesh(PrimitiveType.Cylinder);
             var sph = PrimitiveMesh(PrimitiveType.Sphere);
             var trunks = new List<CombineInstance>();
             var crowns = new List<CombineInstance>();
+            var buildings = NewObject("Buildings", root.transform);
             Vector2 centre = new Vector2(CityLayout.Size * 0.5f, CityLayout.Size * 0.5f);
 
             for (int bi = -1; bi < lines; bi++)
@@ -225,45 +231,81 @@ namespace Racing
                     continue;
                 }
 
-                int nx = Mathf.Max(1, Mathf.RoundToInt((x1 - x0) / 36f));
-                int nz = Mathf.Max(1, Mathf.RoundToInt((z1 - z0) / 36f));
+                int nx = Mathf.Max(1, Mathf.FloorToInt((x1 - x0) / lotSize));
+                int nz = Mathf.Max(1, Mathf.FloorToInt((z1 - z0) / lotSize));
                 float lw = (x1 - x0) / nx, ld = (z1 - z0) / nz;
                 for (int lx = 0; lx < nx; lx++)
                 for (int lz = 0; lz < nz; lz++)
                 {
                     float cx = x0 + (lx + 0.5f) * lw, cz = z0 + (lz + 0.5f) * ld;
-                    if (R() < 0.12f)
+                    bool edge = lx == 0 || lz == 0 || lx == nx - 1 || lz == nz - 1;
+                    if (!edge)
                     {
-                        // Small plaza with a couple of trees.
-                        for (int t = 0; t < 3; t++)
-                            AddTree(trunks, crowns, cyl, sph, new Vector3(cx + (R() - 0.5f) * lw * 0.6f, 0f, cz + (R() - 0.5f) * ld * 0.6f), 0.7f + R() * 0.4f, R());
+                        // Hidden courtyard: an occasional tree.
+                        if (R() < 0.3f) AddTree(trunks, crowns, cyl, sph, new Vector3(cx, 0f, cz), 0.8f + R() * 0.5f, R());
                         continue;
                     }
-                    float w = lw - 3f - R() * 5f, d = ld - 3f - R() * 5f;
-                    float lo = Mathf.Min(Mathf.Min(H(cx - w / 2, cz - d / 2), H(cx + w / 2, cz - d / 2)), Mathf.Min(H(cx - w / 2, cz + d / 2), H(cx + w / 2, cz + d / 2)));
-                    float hi = Mathf.Max(Mathf.Max(H(cx - w / 2, cz - d / 2), H(cx + w / 2, cz - d / 2)), Mathf.Max(H(cx - w / 2, cz + d / 2), H(cx + w / 2, cz + d / 2)));
-                    float downtown = Mathf.Clamp01(1f - Vector2.Distance(new Vector2(cx, cz), centre) / 520f);
-                    float height = Mathf.Lerp(10f, 30f, R()) * Mathf.Lerp(0.8f, 1.6f, downtown);
-                    if (R() < 0.08f + 0.22f * downtown) height = 50f + R() * 80f;
 
-                    int sub = rng.Next(fc);
-                    float baseY = lo - 2f;
-                    float top = hi + CityLayout.CurbHeight + height;
-                    mb.Box(sub, roofSub, new Vector3(cx, baseY, cz), new Vector3(w, top - baseY, d), 24f, 28f);
-                    if (height > 45f && R() < 0.6f)
-                        mb.Box(sub, roofSub, new Vector3(cx, top, cz), new Vector3(w * 0.6f, 4f + R() * 12f, d * 0.6f), 24f, 28f);
-                    else if (R() < 0.5f)
-                        mb.Box(roofSub, roofSub, new Vector3(cx + (R() - 0.5f) * w * 0.4f, top, cz + (R() - 0.5f) * d * 0.4f), new Vector3(4f, 2.2f, 3f), 4f, 4f);
+                    // Face the nearest street (Kenney buildings face +z).
+                    float yaw = lz == 0 ? 180f : lz == nz - 1 ? 0f : lx == 0 ? 270f : 90f;
+                    float downtown = Mathf.Clamp01(1f - Vector2.Distance(new Vector2(cx, cz), centre) / 520f);
+                    bool tower = skyscraperPrefabs.Length > 0 && R() < 0.1f + 0.35f * downtown;
+                    var set = tower ? skyscraperPrefabs : buildingPrefabs;
+                    if (set.Length == 0) continue;
+                    var prefab = set[rng.Next(set.Length)];
+                    var mat = buildingMaterials.Length > 0 ? buildingMaterials[rng.Next(buildingMaterials.Length)] : null;
+                    float stretch = tower ? 1f + downtown * 0.9f * R() : 1f;
+                    PlaceBuilding(buildings.transform, plinths, prefab, mat, new Vector3(cx, 0f, cz), yaw, Mathf.Min(lw, ld) - 1.5f, stretch);
                 }
             }
 
-            var mats = new Material[fc + 1];
-            for (int i = 0; i < fc; i++) mats[i] = facades.Length > 0 ? facades[i] : roof;
-            mats[roofSub] = roof;
-            var city = MeshObject("Buildings", root, mb.Build(), true, mats);
-            city.layer = cityLayer;
+            MeshObject("Plinths", root, plinths.Build(), true, sidewalk).layer = cityLayer;
             MeshObject("Trunks", root, Combine(trunks), false, trunk).layer = cityLayer;
             MeshObject("Crowns", root, Combine(crowns), false, leaves).layer = cityLayer;
+        }
+
+        void PlaceBuilding(Transform parent, MeshBuilder plinths, GameObject prefab, Material mat, Vector3 centre, float yaw, float maxFootprint, float stretch)
+        {
+            var go = Instantiate(prefab, parent);
+            go.name = prefab.name;
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+
+            // Scale to the lot: the usual scale, shrunk if the footprint would overflow.
+            go.transform.localScale = Vector3.one;
+            Bounds b = WorldBounds(renderers);
+            float foot = Mathf.Max(b.size.x, b.size.z);
+            float s = Mathf.Min(buildingScale, maxFootprint / Mathf.Max(foot, 0.01f));
+            go.transform.localScale = new Vector3(s, s * stretch, s);
+            b = WorldBounds(renderers);
+
+            // Sit the building on the highest ground under it; a plinth fills down to the lowest.
+            float hx = b.extents.x, hz = b.extents.z;
+            float lo = float.MaxValue, hi = float.MinValue;
+            foreach (var c in new[] { new Vector2(-hx, -hz), new Vector2(hx, -hz), new Vector2(-hx, hz), new Vector2(hx, hz), Vector2.zero })
+            {
+                float h = H(centre.x + c.x, centre.z + c.y);
+                lo = Mathf.Min(lo, h);
+                hi = Mathf.Max(hi, h);
+            }
+            float baseY = hi + CityLayout.CurbHeight;
+            go.transform.position = new Vector3(centre.x, baseY - (b.min.y - go.transform.position.y), centre.z);
+            plinths.Box(0, 0, new Vector3(centre.x, lo - 1f, centre.z), new Vector3(b.size.x + 0.6f, baseY - lo + 1f, b.size.z + 0.6f), 4f, 4f);
+
+            if (mat) foreach (var r in renderers) r.sharedMaterial = mat;
+            foreach (var t in go.GetComponentsInChildren<Transform>()) t.gameObject.layer = cityLayer;
+            b = WorldBounds(renderers);
+            var box = go.AddComponent<BoxCollider>();
+            box.center = go.transform.InverseTransformPoint(b.center);
+            Vector3 size = go.transform.InverseTransformVector(b.size);
+            box.size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
+        }
+
+        static Bounds WorldBounds(Renderer[] renderers)
+        {
+            var b = renderers[0].bounds;
+            foreach (var r in renderers) b.Encapsulate(r.bounds);
+            return b;
         }
 
         static void AddTree(List<CombineInstance> trunks, List<CombineInstance> crowns, Mesh cyl, Mesh sph, Vector3 pos, float s, float spin)
@@ -386,8 +428,11 @@ namespace Racing
             go.GetComponent<MeshRenderer>().sharedMaterial = mat;
         }
 
+        // Edit mode only: keeps generated objects out of the saved scene. At runtime they are ordinary scene
+        // objects, so they are torn down with the scene (DontSave objects outlive physics shutdown and crash on quit).
         static void SetFlags(GameObject go)
         {
+            if (Application.isPlaying) return;
             foreach (var t in go.GetComponentsInChildren<Transform>(true)) t.gameObject.hideFlags = HideFlags.DontSave;
         }
 
@@ -403,6 +448,8 @@ namespace Racing
 
         void OnDisable()
         {
+            // Only needed in the editor; tearing down thousands of objects while the player quits can crash.
+            if (Application.isPlaying) return;
             var old = transform.Find(RootName);
             if (old) DestroyGenerated(old.gameObject);
         }

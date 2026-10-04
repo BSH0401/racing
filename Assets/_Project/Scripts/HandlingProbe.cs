@@ -42,6 +42,9 @@ namespace Racing
                 new Step { time = 1.5f, throttle = 0.8f, steer = 0f },
             });
 
+            yield return Run(car, origin, "G turn-in @100 (0.4s full steer)", 28f, new[] { new Step { time = 0.4f, throttle = 0.5f, steer = 1f } });
+            yield return Run(car, origin, "H city corner @60 full lock", 17f, new[] { new Step { time = 2f, throttle = 0.4f, steer = 1f } });
+
             race.Quit();
         }
 
@@ -76,7 +79,8 @@ namespace Racing
                     minUp = Mathf.Min(minUp, car.transform.up.y);
                 }
                 float yaw = Vector3.Dot(car.Body.angularVelocity, car.transform.up) * Mathf.Rad2Deg;
-                sb.Append($"   after {s.time:F1}s thr={s.throttle} steer={s.steer} hb={s.handbrake}: speed={car.SpeedKmh:F0}km/h yaw={yaw:F0}deg/s drift={car.DriftAngle:F1} steerAngle={car.SteerAngle:F1}\n");
+                float radius = Mathf.Abs(yaw) > 1f ? car.Body.linearVelocity.magnitude / (Mathf.Abs(yaw) * Mathf.Deg2Rad) : 0f;
+                sb.Append($"   after {s.time:F1}s thr={s.throttle} steer={s.steer} hb={s.handbrake}: speed={car.SpeedKmh:F0}km/h yaw={yaw:F0}deg/s radius={radius:F0}m drift={car.DriftAngle:F1} steerAngle={car.SteerAngle:F1}\n");
             }
             sb.Append($"   maxLatG={maxLatG:F2} avgLatG={sumLatG / Mathf.Max(1, samples):F2} maxDrift={maxDrift:F1} minUp={minUp:F2} spun={(maxDrift > 90f)} flipped={(minUp < 0.5f)}");
             Debug.Log(sb.ToString());

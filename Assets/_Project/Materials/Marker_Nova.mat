@@ -28,7 +28,7 @@ Material:
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
+  m_DoubleSidedGI: 1
   m_CustomRenderQueue: -1
   stringTagMap:
     RenderType: Opaque
@@ -65,7 +65,7 @@ Material:
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
     m_Colors:
-    - _BaseColor: {r: 0.95, g: 0.8, b: 0.1, a: 1}
-    - _Color: {r: 0.95, g: 0.8, b: 0.09999997, a: 1}
+    - _BaseColor: {r: 1, g: 0.71695703, b: 0.296856, a: 1}
+    - _Color: {r: 1, g: 0.71695703, b: 0.29685596, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

@@ -19,7 +19,7 @@ namespace Racing
         public float suspensionRest = 0.28f;
         public float springStrength = 27000f;
         public float damper = 2900f;
-        public float antiRoll = 9000f;
+        public float antiRoll = 20000f;
 
         [Header("Engine")]
         public float maxSpeed = 58f;
@@ -33,17 +33,21 @@ namespace Racing
 
         [Header("Steering")]
         public float maxSteerLow = 36f;
-        public float maxSteerHigh = 13f;
-        public float steerSpeed = 160f;
+        public float maxSteerHigh = 17f;
+        public float steerSpeed = 220f;
         [Tooltip("Front wheels follow the direction of travel when the rear steps out.")]
-        public float counterSteer = 0.8f;
+        public float counterSteer = 0.5f;
         [Tooltip("Yaw damping applied when the driver is not steering.")]
         public float yawStability = 1.6f;
         [Tooltip("Extra yaw damping once the car is sliding (stability control).")]
         public float slideStability = 3f;
+        [Tooltip("Pulls the yaw rate towards what the steering angle asks for (crisp turn-in, no lazy slides).")]
+        public float turnAssist = 3.5f;
+        [Tooltip("Bleeds off sideways body velocity (arcade grip).")]
+        public float sideGripAssist = 2f;
 
         [Header("Tyres")]
-        public float tireGrip = 1.25f;
+        public float tireGrip = 1.55f;
         public float frontGrip = 1f;
         public float rearGrip = 1.12f;
         public float handbrakeGrip = 0.35f;
@@ -184,11 +188,27 @@ namespace Racing
                 float cancel = Mathf.Abs(vLat) * massPerWheel / dt;
                 fy = Mathf.Clamp(fy, -cancel, cancel);
 
-                Vector3 at = transform.TransformPoint(new Vector3(wheelAnchors[i].x, comY - 0.15f, wheelAnchors[i].z));
+                // Applied at centre-of-mass height so cornering grip doesn't roll the car over (body roll is visual).
+                Vector3 at = transform.TransformPoint(new Vector3(wheelAnchors[i].x, comY, wheelAnchors[i].z));
                 rb.AddForceAtPosition(wheelFwd * fx + wheelRight * fy, at);
             }
 
             OffRoad = offRoad >= 2;
+
+            // Turn assist: steer angle -> target yaw rate (bicycle model), capped by available grip.
+            float wheelbase = Mathf.Max(1f, wheelAnchors[0].z - wheelAnchors[2].z);
+            Vector3 right = transform.right;
+            if (!handbrake && GroundedWheels >= 2 && fwdSpeed > 2f)
+            {
+                float desiredYaw = fwdSpeed * Mathf.Tan(SteerAngle * Mathf.Deg2Rad) / wheelbase;
+                float maxYaw = tireGrip * 9.81f / Mathf.Max(fwdSpeed, 1f);
+                desiredYaw = Mathf.Clamp(desiredYaw, -maxYaw, maxYaw);
+                float currentYaw = Vector3.Dot(rb.angularVelocity, up);
+                rb.AddTorque(up * (desiredYaw - currentYaw) * turnAssist, ForceMode.Acceleration);
+            }
+            // Side grip assist: less of the floaty sideways drift.
+            float sideVel = Vector3.Dot(rb.linearVelocity, right);
+            rb.AddForce(-right * sideVel * sideGripAssist * (handbrake ? 0.2f : 1f) * GroundedWheels / 4f, ForceMode.Acceleration);
 
             // Settle the yaw when the driver lets go of the wheel.
             float yawRate = Vector3.Dot(rb.angularVelocity, up);
@@ -230,16 +250,17 @@ namespace Racing
             for (int axle = 0; axle < 4; axle += 2)
             {
                 int l = axle, r = axle + 1;
+                // The more compressed side is pushed up, the other pulled down.
                 float f = (compression[l] - compression[r]) * antiRoll;
-                if (grounded[l]) { rb.AddForceAtPosition(-up * f, transform.TransformPoint(wheelAnchors[l])); load[l] = Mathf.Max(0f, load[l] - f); }
-                if (grounded[r]) { rb.AddForceAtPosition(up * f, transform.TransformPoint(wheelAnchors[r])); load[r] = Mathf.Max(0f, load[r] + f); }
+                if (grounded[l]) { rb.AddForceAtPosition(up * f, transform.TransformPoint(wheelAnchors[l])); load[l] = Mathf.Max(0f, load[l] + f); }
+                if (grounded[r]) { rb.AddForceAtPosition(-up * f, transform.TransformPoint(wheelAnchors[r])); load[r] = Mathf.Max(0f, load[r] - f); }
             }
         }
 
-        // Normalised lateral force vs slip angle (Pacejka-style): peaks near 11 degrees, keeps ~75% when sliding.
+        // Normalised lateral force vs slip angle (Pacejka-style): peaks near 9 degrees, keeps ~90% when sliding.
         static float TyreCurve(float slip)
         {
-            const float B = 9f, C = 1.45f, E = 0.2f;
+            const float B = 11f, C = 1.3f, E = 0.2f;
             float bx = B * slip;
             return Mathf.Sin(C * Mathf.Atan(bx - E * (bx - Mathf.Atan(bx))));
         }
