@@ -19,6 +19,7 @@ namespace Racing
         public Racer[] racers;
         public ChaseCamera chaseCamera;
         public RaceHUD hud;
+        public ChaseMode chase;
         public ThemeController theme;
         public Camera minimapCamera;
         public int laps = 3;
@@ -33,6 +34,10 @@ namespace Racing
         public bool Paused { get; private set; }
         public Racer Player { get; private set; }
         public int LastPrize { get; private set; }
+        public GameMode Mode { get; private set; }
+        public string ResultTitle { get; private set; }
+        public string ResultBody { get; private set; }
+        public bool Chasing => Mode != GameMode.Race && chase;
         public bool Transitioning { get; private set; }
 
         // Checkpoints are route samples spaced ~110 m apart; index 0 is the start/finish line.
@@ -62,6 +67,9 @@ namespace Racing
             laps = Mathf.Clamp(Mathf.RoundToInt(DevFlags.GetFloat("-laps", laps)), 1, 10);
             difficulty = (Difficulty)Mathf.Clamp(PlayerPrefs.GetInt("difficulty", (int)difficulty), 0, 2);
             baseTimeScale = DevFlags.GetFloat("-timescale", 1f);
+            Mode = (GameMode)Mathf.Clamp(PlayerPrefs.GetInt("mode", 0), 0, 2);
+            string devMode = DevFlags.Get("-mode");
+            if (!string.IsNullOrEmpty(devMode) && System.Enum.TryParse(devMode, true, out GameMode m)) Mode = m;
             autopilot = DevFlags.Has("-autopilot");
             quitAfter = DevFlags.GetFloat("-quitafter", 0f);
             menuStartAt = DevFlags.GetFloat("-menustart", 0f);
@@ -106,7 +114,7 @@ namespace Racing
                 enabled = false;
                 return;
             }
-            if (DevFlags.Has("-autostart")) { PrepareGrid(); BeginCountdown(); }
+            if (DevFlags.Has("-autostart")) { PrepareGrid(); PrepareChase(); BeginCountdown(); }
             else EnterMenu();
         }
 
@@ -118,19 +126,26 @@ namespace Racing
             PlayerPrefs.SetInt("laps", laps);
         }
 
+        public void SetMode(GameMode m)
+        {
+            Mode = m;
+            PlayerPrefs.SetInt("mode", (int)m);
+        }
+
         public void SetDifficulty(Difficulty d)
         {
             difficulty = d;
             PlayerPrefs.SetInt("difficulty", (int)d);
         }
 
-        float DifficultyScale => difficulty switch { Difficulty.Easy => 0.9f, Difficulty.Hard => 1.06f, _ => 1f };
+        public float DifficultyScale => difficulty switch { Difficulty.Easy => 0.9f, Difficulty.Hard => 1.06f, _ => 1f };
 
         // ---- Flow ----
 
         // Main menu: every car (including the player's) drives on autopilot behind the menu.
         void EnterMenu()
         {
+            if (chase) chase.Restore();
             PrepareGrid();
             State = RaceState.Menu;
             foreach (var r in racers)
@@ -143,7 +158,30 @@ namespace Racing
             if (minimapCamera) minimapCamera.enabled = false;
         }
 
-        public void StartRace() => Transition(() => { PrepareGrid(); BeginCountdown(); });
+        public void StartRace() => Transition(() => { PrepareGrid(); PrepareChase(); BeginCountdown(); });
+
+        void PrepareChase()
+        {
+            if (Chasing) chase.Prepare(Mode, autopilot);
+            else if (chase) chase.Restore();
+            if (Player && chaseCamera) chaseCamera.Snap();
+        }
+
+        // Called by ChaseMode when a pursuit or escape ends.
+        public void EndChase(bool success, string title, string body, int prize)
+        {
+            State = RaceState.Finished;
+            ResultTitle = title;
+            ResultBody = body;
+            hud.Flash(title, 2f);
+            LastPrize = prize;
+            if (!autopilot)
+            {
+                Garage.Credits += prize;
+                PlayerPrefs.Save();
+            }
+            Debug.Log($"[Chase] {Mode} {(success ? "success" : "fail")}: {title} t={RaceTime:F1} prize={prize}");
+        }
         public void BackToMenu() => Transition(EnterMenu);
 
         void Transition(System.Action action)
@@ -163,6 +201,7 @@ namespace Racing
 
         void PrepareGrid()
         {
+            if (chase) chase.Restore();
             SetPaused(false);
             State = RaceState.Countdown;
             Countdown = 3f;
@@ -207,6 +246,7 @@ namespace Racing
 
         void SetAutopilot(Racer r, bool on)
         {
+            if (r.chaser) r.chaser.enabled = false;
             if (r.ai) r.ai.enabled = on;
             if (r.driver) r.driver.enabled = !on;
         }
@@ -230,6 +270,7 @@ namespace Racing
             }
             sfx.PlayOneShot(go, 0.6f);
             hud.Flash("GO!", 1f);
+            if (Chasing) chase.OnGo();
         }
 
         void Update()
@@ -248,7 +289,12 @@ namespace Racing
                 RaceTime += Time.deltaTime;
             }
 
-            if (State == RaceState.Racing || State == RaceState.Finished)
+            if (Chasing && (State == RaceState.Racing || State == RaceState.Finished))
+            {
+                foreach (var r in racers) if (r.gameObject.activeSelf) UpdateRacer(r, false);
+                if (State == RaceState.Racing && !Paused) chase.Tick(Time.deltaTime);
+            }
+            else if (State == RaceState.Racing || State == RaceState.Finished)
             {
                 foreach (var r in racers) UpdateRacer(r);
                 RubberBand();
@@ -349,8 +395,8 @@ namespace Racing
             bool flipped = r.transform.up.y < 0.3f && v.magnitude < 4f;
             r.flipTimer = flipped ? r.flipTimer + dt : 0f;
 
-            bool stuck = !r.isPlayer || r.ai.enabled;
-            stuck &= v.magnitude < 2f;
+            bool stuck = !r.isPlayer || r.ai.enabled || (r.chaser && r.chaser.enabled);
+            stuck &= v.magnitude < 2f && !car.InputLocked && !(Chasing && chase.SuppressStuck(r));
             r.stuckTimer = stuck ? r.stuckTimer + dt : 0f;
 
             // HUD warning: heading away from the next checkpoint during the race.
@@ -462,6 +508,8 @@ namespace Racing
             {
                 if (Player)
                     Debug.Log($"[Racing] t={RaceTime:F1} state={State} playerPos={Player.position} lap={Player.CurrentLap(laps, CheckpointCount)} cp={Player.cpPassed} finished={Player.finished} best={Player.bestLap:F2}");
+                if (Chasing && chase)
+                    Debug.Log($"[Chase] mode={Mode} state={State} timeLeft={chase.TimeLeft:F1} dist={chase.Distance:F0} health={chase.TargetHealth:F2} bust={chase.Bust:F2} police={chase.PoliceCount} result={ResultTitle}");
                 foreach (var r in Standings)
                     Debug.Log($"[Racing] P{r.position} {r.racerName} cps={r.cpPassed} finished={r.finished} time={r.finishTime:F2} best={r.bestLap:F2} respawns={r.respawns}");
                 quitAfter = 0f;

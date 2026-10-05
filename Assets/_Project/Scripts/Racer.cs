@@ -12,6 +12,7 @@ namespace Racing
         [System.NonSerialized] public CarController car;
         [System.NonSerialized] public AIDriver ai;
         [System.NonSerialized] public PlayerDriver driver;
+        [System.NonSerialized] public ChaseDriver chaser;
 
         // Nearest route sample (used by the AI and for respawns).
         [System.NonSerialized] public int index;
@@ -36,6 +37,7 @@ namespace Racing
             car = GetComponent<CarController>();
             ai = GetComponent<AIDriver>();
             driver = GetComponent<PlayerDriver>();
+            chaser = GetComponent<ChaseDriver>();
         }
 
         public void ResetProgress(int startIndex)

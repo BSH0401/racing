@@ -12,7 +12,11 @@ namespace Racing
 
         Text posText, lapText, timeText, bestText, speedText, boardText, centerText, flashText, wrongWayText;
         GameObject hudRoot, pausePanel, resultPanel;
-        Text resultTitle, resultBody;
+        Text resultTitle, resultBody, againText;
+        // Chase modes: status line and a damage / busted meter under the timer.
+        GameObject chaseRoot;
+        Text chaseLabel;
+        Image chaseFill;
         Image fade;
         float flashTimer;
 
@@ -31,6 +35,14 @@ namespace Racing
             wrongWayText = UIKit.Label(h, 64, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, 180f), new Vector2(1000f, 90f));
             wrongWayText.color = new Color(1f, 0.3f, 0.25f);
             wrongWayText.text = "WRONG WAY";
+            chaseRoot = UIKit.Group("Chase", h);
+            var c = chaseRoot.transform;
+            chaseLabel = UIKit.Label(c, 30, TextAnchor.UpperCenter, new Vector2(0.5f, 1f), new Vector2(0f, -92f), new Vector2(1000f, 44f));
+            UIKit.Rect("MeterBack", c, new Vector2(0.5f, 1f), new Vector2(0f, -142f), new Vector2(420f, 18f), new Color(0f, 0f, 0f, 0.55f));
+            chaseFill = UIKit.Rect("MeterFill", c, new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(420f, 18f), Color.red);
+            chaseFill.rectTransform.SetParent(c.Find("MeterBack"), false);
+            chaseFill.rectTransform.anchoredPosition = Vector2.zero;
+
             UIKit.Label(h, 20, TextAnchor.LowerLeft, new Vector2(0f, 0f), new Vector2(40f, 24f), new Vector2(1200f, 30f)).text =
                 "R reset car   C camera   ESC pause";
 
@@ -49,7 +61,7 @@ namespace Racing
             resultTitle = UIKit.Label(rp, 90, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, 320f), new Vector2(1600f, 130f));
             resultTitle.color = new Color(1f, 0.82f, 0.15f);
             resultBody = UIKit.Label(rp, 36, TextAnchor.UpperCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, 20f), new Vector2(1100f, 420f));
-            var again = UIKit.Label(rp, 38, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, -300f), new Vector2(1400f, 60f));
+            var again = againText = UIKit.Label(rp, 38, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, -300f), new Vector2(1400f, 60f));
             again.text = "ENTER  race again        ESC  main menu";
             again.color = new Color(0.6f, 1f, 0.6f);
 
@@ -99,8 +111,48 @@ namespace Racing
             flashText.enabled = flashTimer > 0f && state != RaceState.Menu;
             if (state == RaceState.Menu) return;
 
+            bool chasing = race.Chasing;
+            chaseRoot.SetActive(chasing);
+            posText.enabled = lapText.enabled = boardText.enabled = bestText.enabled = !chasing;
+            againText.text = chasing ? "ENTER  play again        ESC  main menu" : "ENTER  race again        ESC  main menu";
+            if (chasing && player)
+            {
+                var ch = race.chase;
+                float shown = state == RaceState.Countdown ? (race.Mode == GameMode.Pursuit ? ch.pursuitTime : ch.escapeTime) : Mathf.Max(0f, ch.TimeLeft);
+                timeText.text = UIKit.FormatTime(shown);
+                timeText.color = shown < 15f && state == RaceState.Racing ? new Color(1f, 0.35f, 0.3f) : Color.white;
+                speedText.text = $"<size=120><b>{Mathf.RoundToInt(player.car.SpeedKmh)}</b></size> km/h";
+                wrongWayText.enabled = false;
+                float meter;
+                if (race.Mode == GameMode.Pursuit)
+                {
+                    string warn = ch.LostTimer > 0f ? "   <color=#ff6a5a><b>LOSING THE SUSPECT!</b></color>" : "";
+                    chaseLabel.text = $"SUSPECT  <b>{ch.Distance:F0} m</b>{warn}";
+                    meter = ch.TargetHealth;
+                    chaseFill.color = Color.Lerp(new Color(1f, 0.2f, 0.15f), new Color(1f, 0.8f, 0.2f), meter);
+                }
+                else
+                {
+                    string state2 = ch.Bust > 0.05f ? "   <color=#ff6a5a><b>BUSTED!</b></color>" : ch.LostTimer > 0f ? "   <color=#7dff8a><b>LOSING THEM...</b></color>" : "";
+                    chaseLabel.text = $"POLICE  <b>{(ch.Distance < 9999f ? ch.Distance.ToString("F0") : "-")} m</b>   ·   {ch.PoliceCount} units{state2}";
+                    meter = ch.Bust;
+                    chaseFill.color = Mathf.Repeat(Time.time * 2.5f, 1f) < 0.5f ? new Color(1f, 0.15f, 0.15f) : new Color(0.2f, 0.4f, 1f);
+                }
+                chaseFill.rectTransform.sizeDelta = new Vector2(420f * Mathf.Clamp01(meter), 18f);
+                if (state == RaceState.Finished)
+                {
+                    resultTitle.text = race.ResultTitle;
+                    var cb = new StringBuilder(race.ResultBody).Append('\n');
+                    if (race.LastPrize > 0)
+                        cb.Append($"\n<color=#ffd23a><b>+{race.LastPrize:N0} CR</b></color>    credits {Garage.Credits:N0} CR\n");
+                    resultBody.text = cb.ToString();
+                }
+                return;
+            }
+
             if (player)
             {
+                timeText.color = Color.white;
                 int n = race.racers.Length;
                 posText.text = $"{player.position}<size=44>/{n}</size>";
                 int cps = race.CheckpointCount;

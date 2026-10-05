@@ -319,6 +319,11 @@ namespace Racing.EditorTools
             };
             rm.theme = theme;
             rm.minimapCamera = mini;
+            var chaseMode = rmGo.AddComponent<ChaseMode>();
+            chaseMode.race = rm;
+            chaseMode.sirenRed = UnlitMat("SirenRed", new Color(1f, 0.08f, 0.08f));
+            chaseMode.sirenBlue = UnlitMat("SirenBlue", new Color(0.1f, 0.3f, 1f));
+            rm.chase = chaseMode;
             rmGo.AddComponent<MainMenu>().race = rm;
 
             // Split car meshes are overwritten in place (stable GUIDs); drop ones no longer produced.
@@ -455,6 +460,9 @@ namespace Racing.EditorTools
             racer.isPlayer = player;
             go.AddComponent<AIDriver>();
             if (player) go.AddComponent<PlayerDriver>();
+            go.AddComponent<ChaseDriver>().enabled = false;
+            go.AddComponent<SirenLights>();
+            go.AddComponent<CarImpacts>();
             go.AddComponent<AudioSource>();
             go.AddComponent<CarAudio>().listenerCar = player;
             return racer;

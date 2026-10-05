@@ -78,7 +78,7 @@ namespace Racing
 
             foreach (var other in rm.racers)
             {
-                if (other == racer) continue;
+                if (other == racer || !other.gameObject.activeSelf) continue;
                 Vector3 local = transform.InverseTransformPoint(other.transform.position);
                 if (local.z < 0f || local.z > 16f || Mathf.Abs(local.x) > 2.6f) continue;
                 if (other.car.ForwardSpeed > car.ForwardSpeed + 2f) continue;

@@ -8,7 +8,7 @@ using UnityEngine.UI;
 
 namespace Racing
 {
-    // Title screen shown over the attract-mode race: Start / Garage / Settings / Controls / Quit.
+    // Title screen shown over the attract-mode race: Start / Mode / Garage / Settings / Controls / Quit.
     // Keyboard, gamepad and mouse all work.
     public class MainMenu : MonoBehaviour
     {
@@ -33,7 +33,7 @@ namespace Racing
         readonly Dictionary<Page, List<Item>> items = new Dictionary<Page, List<Item>>();
         Page page;
         int selected;
-        Text recordText, settingsText, footer;
+        Text recordText, settingsText, footer, cardTitle;
         AudioSource sfx;
         AudioClip tick, confirm;
         float shown;
@@ -93,13 +93,14 @@ namespace Racing
             UIKit.Rect("CardBar", card.transform, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(6f, 200f), Accent);
             var cardTitle = UIKit.Label(card.transform, 24, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(34f, -22f), new Vector2(540f, 30f));
             cardTitle.text = "RECORDS";
+            this.cardTitle = cardTitle;
             cardTitle.color = Accent;
             recordText = UIKit.Label(card.transform, 34, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(34f, -58f), new Vector2(540f, 90f));
             settingsText = UIKit.Label(card.transform, 24, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(34f, -150f), new Vector2(540f, 30f));
             settingsText.color = new Color(0.75f, 0.77f, 0.82f);
 
             var version = UIKit.Label(t, 20, TextAnchor.UpperRight, new Vector2(1f, 1f), new Vector2(-40f, -30f), new Vector2(1100f, 30f));
-            version.text = "v0.8   ·   Cars: Sketchfab artists (CC BY 4.0, see README)  ·  Textures: ambientCG  ·  HDRI & props: Poly Haven  (CC0)";
+            version.text = "v0.9   ·   Cars: Sketchfab artists (CC BY 4.0, see README)  ·  Textures: ambientCG  ·  HDRI & props: Poly Haven  (CC0)";
             version.color = new Color(1f, 1f, 1f, 0.6f);
 
             BuildMain(panel.transform);
@@ -116,7 +117,9 @@ namespace Racing
         void BuildMain(Transform panel)
         {
             var list = NewPage(Page.Main, panel);
-            AddItem(Page.Main, list, "START RACE", null, d => { if (d > 0) StartRace(); });
+            AddItem(Page.Main, list, "START", null, d => { if (d > 0) StartRace(); });
+            AddItem(Page.Main, list, "MODE", () => race ? race.Mode.ToString().ToUpper() : "RACE",
+                d => race.SetMode((GameMode)Wrap((int)race.Mode + d, 0, 2)));
             AddItem(Page.Main, list, "GARAGE", null, d => { if (d > 0) Show(Page.Garage); });
             AddItem(Page.Main, list, "SETTINGS", null, d => { if (d > 0) Show(Page.Settings); });
             AddItem(Page.Main, list, "CONTROLS", null, d => { if (d > 0) Show(Page.Controls); });
@@ -369,12 +372,19 @@ namespace Racing
 
             float best = race ? race.BestLapRecord : -1f;
             int finish = race ? race.BestFinishRecord : 0;
-            recordText.text = $"BEST LAP   <b>{UIKit.FormatLap(best)}</b>\nBEST FINISH   <b>{(finish > 0 ? UIKit.Ordinal(finish) : "-")}</b>     CREDITS   <b>{Garage.Credits:N0}</b>";
+            if (race && race.Mode == GameMode.Pursuit)
+                recordText.text = "<size=27>Ram the fleeing suspect until it stops.</size>\nCREDITS   <b>" + Garage.Credits.ToString("N0") + "</b>";
+            else if (race && race.Mode == GameMode.Escape)
+                recordText.text = "<size=27>Lose the police or survive 90 s.</size>\nCREDITS   <b>" + Garage.Credits.ToString("N0") + "</b>";
+            else
+                recordText.text = $"BEST LAP   <b>{UIKit.FormatLap(best)}</b>\nBEST FINISH   <b>{(finish > 0 ? UIKit.Ordinal(finish) : "-")}</b>     CREDITS   <b>{Garage.Credits:N0}</b>";
+            if (race) cardTitle.text = race.Mode == GameMode.Race ? "RECORDS" : race.Mode.ToString().ToUpper();
             if (page == Page.Garage) RefreshGarage();
             if (race)
             {
                 string time = race.theme && race.theme.Current == RaceTheme.Night ? "NIGHT" : "DAY";
-                settingsText.text = $"{race.laps} LAPS  ·  {time}  ·  AI {race.difficulty.ToString().ToUpper()}";
+                string what = race.Mode == GameMode.Race ? $"{race.laps} LAPS" : race.Mode.ToString().ToUpper();
+                settingsText.text = $"{what}  ·  {time}  ·  AI {race.difficulty.ToString().ToUpper()}";
             }
         }
 

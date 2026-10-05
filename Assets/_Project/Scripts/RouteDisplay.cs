@@ -56,7 +56,23 @@ namespace Racing
         void LateUpdate()
         {
             var p = race.Player;
-            bool show = p && !p.finished && (race.State == RaceState.Racing || race.State == RaceState.Countdown);
+            bool live = p && (race.State == RaceState.Racing || race.State == RaceState.Countdown);
+            if (race.Chasing)
+            {
+                // Pursuit: the beam and blip mark the suspect; escape needs no guidance.
+                var target = race.chase.Target;
+                bool mark = live && race.Mode == GameMode.Pursuit && target;
+                beam.gameObject.SetActive(mark);
+                blip.gameObject.SetActive(mark);
+                ring.gameObject.SetActive(false);
+                route.enabled = false;
+                if (!mark) return;
+                beam.position = target.transform.position + Vector3.up * 21f;
+                blip.position = target.transform.position + Vector3.up * 45f;
+                return;
+            }
+
+            bool show = live && !p.finished;
             beam.gameObject.SetActive(show);
             ring.gameObject.SetActive(show);
             blip.gameObject.SetActive(show);

@@ -6,7 +6,12 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 - 언덕이 있는 오픈 도심 맵: 9×9 도로 격자(블록 96m), 4차선 도로·중앙선·횡단보도·연석·보도, 빌딩 블록과 공원, 가로등, 도시 외곽 방벽
 - GTA 스트리트 레이스 방식: 도시를 도는 약 2.6km 경로에 체크포인트 24개, 순서대로 통과(지름길 가능), 다음 체크포인트 광선 표시
 - 플레이어를 따라 회전하는 레이더식 미니맵(경로선·체크포인트 표시)
-- 메인 화면: 배경에서 차들이 자동 주행하고 시네마틱 카메라가 중계 (START RACE / GARAGE / SETTINGS / CONTROLS / QUIT, 마우스 지원)
+- 메인 화면: 배경에서 차들이 자동 주행하고 시네마틱 카메라가 중계 (START / MODE / GARAGE / SETTINGS / CONTROLS / QUIT, 마우스 지원)
+- 게임 모드 (메인 화면 MODE에서 선택)
+  - **RACE**: 체크포인트 레이스
+  - **PURSUIT (추격)**: 도망치는 용의자 차를 150초 안에 들이받아 손상 게이지를 0으로 만들면 검거. 300m 이상 6초간 벌어지면 놓침. 내 차에 경광등, 용의자 위에 표시 광선
+  - **ESCAPE (도주)**: 경찰차(경광등)가 도로망을 따라 추격, 20초마다 지원 경찰 합류(최대 5대). 90초 버티거나 350m 이상 5초간 따돌리면 성공, 경찰에 둘러싸여 멈추면 BUSTED 게이지가 차서 체포
+  - 성공 시 1,500 CR + 남은 시간 보너스, 실패 시 200 CR
 - 차고(GARAGE): 차량 6종의 스펙(최고속도·가속·그립·무게·구동)을 보고 선택. 레이스 순위에 따라 크레딧(CR)을 받아 잠긴 차를 구매·해금 (저장됨)
   | 차량 | 가격 | 특징 |
   |---|---|---|
@@ -51,7 +56,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 도시 지형·도로 격자는 `CityLayout`(높이 함수, 블록 크기), 레이스 경로는 `RacingSetup.RouteIntersections`(교차로 좌표)로 정해지며, 도시 메쉬는 `TrackBuilder`가 실행 시 생성한다.
 
 ## 개발용 실행 옵션
-`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-showcase <폴더>` (차량별 측면·전면·후면 스크린샷 후 종료), `-car <id>` (플레이어 차 강제), `-garage N` (차고 화면 N번 차로 열기), `-credits N`, `-lookyaw N` (자유 시점 각도 고정), `-logrespawns`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
+`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-showcase <폴더>` (차량별 측면·전면·후면 스크린샷 후 종료), `-mode race|pursuit|escape`, `-logchase`, `-car <id>` (플레이어 차 강제), `-garage N` (차고 화면 N번 차로 열기), `-credits N`, `-lookyaw N` (자유 시점 각도 고정), `-logrespawns`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
 
 ## 크레딧
 - 차량 모델 (CC BY 4.0, 크기·방향·바퀴 분리 등 게임용으로 변환, 텍스처 축소):
