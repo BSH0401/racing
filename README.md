@@ -39,7 +39,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 - 낮/밤 테마: 밤에는 빌딩 창문 불빛, 가로등·차량 헤드라이트 실제 조명, 야간 하늘과 안개
 - 실사풍 그래픽: 실사 외벽 사진(PBR) 빌딩, 아스팔트·보도블록 PBR 텍스처, HDRI 하늘(낮/밤)로 조명·반사, 소화전·쓰레기통·콘크리트 방호벽 소품, ACES 톤매핑·SSAO·블룸·모션블러
 - 실사 차량 3D 모델(Sketchfab, CC BY 4.0): 플레이어 BMW M3 E30, AI 포르쉐 911 터보·스포츠카·택시·경찰차·SUV — 바퀴가 실제로 회전·조향
-- 합성 사운드: 실린더 폭발음 기반 엔진(저·고회전 2개 루프 크로스페이드, 5단 기어, 변속 시 끊김, 가속 시 밝고 감속 시 먹먹하게), 차마다 음높이 다름, 타이어 스키드음, 고속 바람 소리, 충돌음, 경찰 사이렌. 설정에서 볼륨(0~10) 조절
+- 사운드: 실제 녹음한 엔진음(공회전·중회전·고회전 3개 루프를 회전수에 따라 크로스페이드, 5단 기어, 변속 시 끊김, 가속 시 밝고 감속 시 먹먹하게), 차마다 음높이 다름, 녹음된 타이어 스키드음·충돌음, 합성 바람 소리·경찰 사이렌. 설정에서 볼륨(0~10) 조절
 
 ## 조작
 | 동작 | 키보드 | 게임패드 |
@@ -80,4 +80,5 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
   - 라이선스: [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/), 원본 정보는 `Assets/_Project/ThirdParty/Sketchfab/*/license.txt`
 - PBR 텍스처(도로·보도·건물 외벽): [ambientCG](https://ambientcg.com) (CC0)
 - HDRI 하늘·거리 소품: [Poly Haven](https://polyhaven.com) (CC0)
+- 효과음 (CC0, [freesound.org](https://freesound.org)): AndrewAlexander, Dmitry_mansurev64, erik90, audible-edge, qubodup — 자세한 출처는 `Assets/_Project/ThirdParty/Freesound/License.txt`, 가공 스크립트 `Tools/sound_prep.py`
 - 라이선스 파일: `Assets/_Project/ThirdParty/*/License.txt` (Sketchfab은 `license.txt`)

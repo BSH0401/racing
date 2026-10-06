@@ -1,0 +1,9 @@
+Recorded sounds, all CC0 1.0 (public domain dedication) from freesound.org.
+Cut, mixed to mono, looped and level-matched for the game by Tools/sound_prep.py.
+Credit is not required by CC0 but given with thanks:
+
+engine_idle.wav   "car_idle_ext_loop.wav" by AndrewAlexander  https://freesound.org/people/AndrewAlexander/sounds/369054/
+engine_mid.wav    "Sedan engine loop" by Dmitry_mansurev64     https://freesound.org/people/Dmitry_mansurev64/sounds/748027/
+engine_high.wav   "car rev.wav" by erik90 (23.0-25.5 s)        https://freesound.org/people/erik90/sounds/181460/
+tire_squeal.wav   "Chrysler LHS tire squeal 02" by audible-edge https://freesound.org/people/audible-edge/sounds/71737/
+crash.wav         "Clank Car Crash Collision" by qubodup        https://freesound.org/people/qubodup/sounds/151624/

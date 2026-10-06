@@ -479,7 +479,13 @@ namespace Racing.EditorTools
             go.AddComponent<SirenLights>();
             go.AddComponent<CarImpacts>();
             go.AddComponent<AudioSource>();
-            go.AddComponent<CarAudio>().listenerCar = player;
+            var audio = go.AddComponent<CarAudio>();
+            audio.listenerCar = player;
+            audio.idleClip = Clip("engine_idle.wav");
+            audio.midClip = Clip("engine_mid.wav");
+            audio.highClip = Clip("engine_high.wav");
+            audio.squealClip = Clip("tire_squeal.wav");
+            audio.crashClip = Clip("crash.wav");
             return racer;
         }
 
@@ -710,6 +716,9 @@ namespace Racing.EditorTools
         }
 
         static GameObject Model(string path) => AssetDatabase.LoadAssetAtPath<GameObject>(path);
+
+        // Recorded CC0 sounds (see ThirdParty/Freesound/License.txt).
+        static AudioClip Clip(string file) => AssetDatabase.LoadAssetAtPath<AudioClip>(Root + "/ThirdParty/Freesound/" + file);
 
         static Cubemap Hdri(string file)
         {
