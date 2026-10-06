@@ -101,6 +101,7 @@ namespace Racing
         void Start()
         {
             Application.targetFrameRate = 120;
+            if (DevFlags.Has("-dumpaudio")) { SynthAudio.Dump(DevFlags.Get("-dumpaudio")); Quit(); return; }
             if (DevFlags.Has("-handlingtest"))
             {
                 // Scripted handling measurements; race logic stays off so nothing respawns the car.
@@ -271,7 +272,7 @@ namespace Racing
                 r.lapStart = 0f;
                 if (r.ai) r.ai.skill = Mathf.Clamp(r.ai.skill, 0.7f, 1f);
             }
-            sfx.PlayOneShot(go, 0.6f);
+            sfx.PlayOneShot(go, 0.4f);
             hud.Flash("GO!", 1f);
             if (Chasing) chase.OnGo();
         }
@@ -284,7 +285,7 @@ namespace Racing
             {
                 Countdown -= Time.deltaTime;
                 int c = Mathf.CeilToInt(Countdown);
-                if (c < lastBeep && c > 0) { lastBeep = c; sfx.PlayOneShot(beep, 0.6f); }
+                if (c < lastBeep && c > 0) { lastBeep = c; sfx.PlayOneShot(beep, 0.35f); }
                 if (Countdown <= 0f) StartRacing();
             }
             else if (State == RaceState.Racing || State == RaceState.Finished)
@@ -378,7 +379,7 @@ namespace Racing
                 }
                 else if (r.isPlayer && next != 0)
                 {
-                    sfx.PlayOneShot(beep, 0.25f);
+                    sfx.PlayOneShot(beep, 0.15f);
                 }
                 next = r.cpPassed % n;
                 cp = CheckpointPosition(next);

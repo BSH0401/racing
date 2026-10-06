@@ -48,6 +48,7 @@ namespace Racing
 
         void Awake()
         {
+            AudioListener.volume = PlayerPrefs.GetFloat("volume", 0.8f);
             sfx = gameObject.AddComponent<AudioSource>();
             sfx.playOnAwake = false;
             tick = SynthAudio.Tone(880f, 0.05f);
@@ -207,6 +208,11 @@ namespace Racing
             AddItem(Page.Settings, list, "LAPS", () => race.laps.ToString(), d => race.SetLaps(Wrap(race.laps + d, 1, 10)));
             AddItem(Page.Settings, list, "TIME", () => race.theme && race.theme.Current == RaceTheme.Night ? "NIGHT" : "DAY", d => { if (race.theme) race.theme.Toggle(); });
             AddItem(Page.Settings, list, "AI", () => race.difficulty.ToString().ToUpper(), d => race.SetDifficulty((Difficulty)Wrap((int)race.difficulty + d, 0, 2)));
+            AddItem(Page.Settings, list, "VOLUME", () => Mathf.RoundToInt(AudioListener.volume * 10f).ToString(), d =>
+            {
+                AudioListener.volume = Mathf.Clamp(Mathf.Round(AudioListener.volume * 10f + d), 0f, 10f) / 10f;
+                PlayerPrefs.SetFloat("volume", AudioListener.volume);
+            });
             AddItem(Page.Settings, list, "BACK", null, d => { if (d > 0) Show(Page.Main); });
         }
 
@@ -324,7 +330,7 @@ namespace Racing
             var item = items[page][selected];
             if (item.getValue != null && (left || right)) Activate(right ? 1 : -1, false);
             else if (ok) Activate(1, true);
-            if (back && page != Page.Main) { sfx.PlayOneShot(tick, 0.4f); Show(Page.Main); }
+            if (back && page != Page.Main) { sfx.PlayOneShot(tick, 0.25f); Show(Page.Main); }
 
             if (kb != null && kb.tKey.wasPressedThisFrame && race.theme) { race.theme.Toggle(); Refresh(); }
             Refresh();
@@ -334,14 +340,14 @@ namespace Racing
         {
             if (index == selected) return;
             selected = index;
-            sfx.PlayOneShot(tick, 0.35f);
+            sfx.PlayOneShot(tick, 0.2f);
             Refresh();
         }
 
         void Activate(int dir, bool confirmSound)
         {
             var item = items[page][selected];
-            sfx.PlayOneShot(confirmSound ? confirm : tick, 0.45f);
+            sfx.PlayOneShot(confirmSound ? confirm : tick, 0.28f);
             item.onActivate?.Invoke(dir);
             Refresh();
         }

@@ -11,6 +11,8 @@ namespace Racing
         Transform bar;
         Renderer left, right;
         Light glow;
+        AudioSource wail;
+        static AudioClip sirenClip;
         bool on;
 
         // showBar = false for bodies with their own roof lights: only the flashing glow is added.
@@ -20,7 +22,13 @@ namespace Racing
             if (value && !bar) Build();
             if (!bar) return;
             bar.gameObject.SetActive(value);
-            if (!value) return;
+            if (!value) { if (wail) wail.Stop(); return; }
+            // The player's own siren (pursuit) stays in the background; cops are louder and positional.
+            var racer = GetComponent<Racer>();
+            bool mine = racer && racer.isPlayer;
+            wail.volume = mine ? 0.07f : 0.3f;
+            wail.time = Random.Range(0f, sirenClip.length);
+            wail.Play();
             Fit();
             barVisible = showBar;
         }
@@ -40,6 +48,17 @@ namespace Racing
             glow.intensity = 30f;
             glow.shadows = LightShadows.None;
             foreach (var t in bar.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = 2;
+
+            if (!sirenClip) sirenClip = SynthAudio.Siren();
+            wail = bar.gameObject.AddComponent<AudioSource>();
+            wail.clip = sirenClip;
+            wail.loop = true;
+            wail.playOnAwake = false;
+            wail.spatialBlend = 1f;
+            wail.rolloffMode = AudioRolloffMode.Logarithmic;
+            wail.minDistance = 10f;
+            wail.maxDistance = 200f;
+            wail.dopplerLevel = 0.6f;
         }
 
         Renderer Lamp(string name, Material mat, float x)
