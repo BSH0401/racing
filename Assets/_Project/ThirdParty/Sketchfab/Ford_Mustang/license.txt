@@ -1,0 +1,11 @@
+Model Information:
+* title:	1965 Ford Mustang
+* source:	https://sketchfab.com/3d-models/1965-ford-mustang-7e93cc22b96a4788897a513374ef4486
+* author:	David_Holiday (https://sketchfab.com/David_Holiday)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "1965 Ford Mustang" (https://sketchfab.com/3d-models/1965-ford-mustang-7e93cc22b96a4788897a513374ef4486) by David_Holiday (https://sketchfab.com/David_Holiday) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

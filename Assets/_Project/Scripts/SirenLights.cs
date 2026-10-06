@@ -13,14 +13,19 @@ namespace Racing
         Light glow;
         bool on;
 
-        public void Set(bool value)
+        // showBar = false for bodies with their own roof lights: only the flashing glow is added.
+        public void Set(bool value, bool showBar = true)
         {
             on = value;
             if (value && !bar) Build();
             if (!bar) return;
             bar.gameObject.SetActive(value);
-            if (value) Fit();
+            if (!value) return;
+            Fit();
+            barVisible = showBar;
         }
+
+        bool barVisible = true;
 
         void Build()
         {
@@ -69,8 +74,8 @@ namespace Racing
         {
             if (!on || !bar) return;
             bool phase = Mathf.Repeat(Time.time * 2.5f, 1f) < 0.5f;
-            left.enabled = phase;
-            right.enabled = !phase;
+            left.enabled = barVisible && phase;
+            right.enabled = barVisible && !phase;
             glow.color = phase ? new Color(1f, 0.1f, 0.1f) : new Color(0.15f, 0.3f, 1f);
             glow.transform.localPosition = new Vector3(phase ? -0.3f : 0.3f, 0.3f, 0f);
         }

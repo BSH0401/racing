@@ -12,16 +12,25 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
   - **PURSUIT (추격)**: 도망치는 용의자 차를 150초 안에 들이받아 손상 게이지를 0으로 만들면 검거. 300m 이상 6초간 벌어지면 놓침. 내 차에 경광등, 용의자 위에 표시 광선
   - **ESCAPE (도주)**: 경찰차(경광등)가 도로망을 따라 추격, 20초마다 지원 경찰 합류(최대 5대). 90초 버티거나 350m 이상 5초간 따돌리면 성공, 경찰에 둘러싸여 멈추면 BUSTED 게이지가 차서 체포
   - 성공 시 1,500 CR + 남은 시간 보너스, 실패 시 200 CR
-- 차고(GARAGE): 차량 6종의 스펙(최고속도·가속·그립·무게·구동)을 보고 선택. 레이스 순위에 따라 크레딧(CR)을 받아 잠긴 차를 구매·해금 (저장됨)
+- 차고(GARAGE): 차량 15종의 스펙(최고속도·가속·그립·무게·구동)을 보고 선택. 레이스 순위에 따라 크레딧(CR)을 받아 잠긴 차를 구매·해금 (저장됨)
   | 차량 | 가격 | 특징 |
   |---|---|---|
   | BMW M3 E30 | 기본 | 균형 잡힌 후륜 |
   | Crown Victoria Taxi | 1,500 CR | 무겁고 느리지만 튼튼 |
+  | Mazda RX-7 FC | 2,000 CR | 가볍고 싼 입문 드리프트카 |
   | Street SUV | 3,000 CR | 출발 가속 강함, 그립 낮음 |
+  | Ford Mustang '65 | 4,000 CR | V8 머슬, 잘 미끄러짐 |
+  | Mercedes G-Class | 4,500 CR | 무겁고 밀어붙이기 좋음 (4WD) |
   | Police Interceptor | 5,000 CR | 높은 최고속도 |
+  | Charger Pursuit | 6,500 CR | 현대식 경찰 머슬 |
+  | Toyota Supra A70 | 7,000 CR | 터보 GT |
   | Sport Coupe | 8,000 CR | 가볍고 날카로운 코너링 |
-  | Porsche 911 Turbo | 12,000 CR | 가장 빠름, 뒤가 잘 미끄러짐 |
-- 상금: 1~6위 2,000/1,400/1,000/700/500/300 CR (2랩 기준, 랩 수에 비례). 선택하지 않은 차는 AI가 탄다
+  | Mercedes 300 SL | 9,000 CR | 걸윙 클래식 GT |
+  | Mazda RX-7 FD | 10,000 CR | 로터리, 민첩하고 빠름 |
+  | Honda NSX | 11,000 CR | 미드십 코너링 |
+  | Porsche 911 Turbo | 12,000 CR | 최고속도 최강, 뒤가 잘 미끄러짐 |
+  | Nissan Skyline R34 | 14,000 CR | 4륜구동 그립 최강 |
+- 상금: 1~6위 2,000/1,400/1,000/700/500/300 CR (2랩 기준, 랩 수에 비례). 레이스에 나오는 6대 외의 차는 예비 차체로 보관되다가 선택하면 교체된다. 도주 모드 경찰은 실제 경찰차(Charger·크라운 빅토리아)를 우선 사용
 - 설정: 랩 수(1~10), 시간대(낮/밤), AI 난이도(EASY/NORMAL/HARD) — 저장됨
 - 기록: 베스트 랩, 최고 순위 저장 및 메인 화면 표시
 - 플레이어 1명 + AI 5명
@@ -56,7 +65,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 도시 지형·도로 격자는 `CityLayout`(높이 함수, 블록 크기), 레이스 경로는 `RacingSetup.RouteIntersections`(교차로 좌표)로 정해지며, 도시 메쉬는 `TrackBuilder`가 실행 시 생성한다.
 
 ## 개발용 실행 옵션
-`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-showcase <폴더>` (차량별 측면·전면·후면 스크린샷 후 종료), `-mode race|pursuit|escape`, `-logchase`, `-car <id>` (플레이어 차 강제), `-garage N` (차고 화면 N번 차로 열기), `-credits N`, `-lookyaw N` (자유 시점 각도 고정), `-logrespawns`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
+`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-showcase <폴더>` (차량별 측면·전면·후면 스크린샷 후 종료, `-showall`이면 차고 15종 전부), `-mode race|pursuit|escape`, `-logchase`, `-car <id>` (플레이어 차 강제), `-garage N` (차고 화면 N번 차로 열기), `-credits N`, `-lookyaw N` (자유 시점 각도 고정), `-logrespawns`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
 
 ## 크레딧
 - 차량 모델 (CC BY 4.0, 크기·방향·바퀴 분리 등 게임용으로 변환, 텍스처 축소):
@@ -65,6 +74,9 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
   - "[Generic passenger car pack](https://sketchfab.com/3d-models/generic-passenger-car-pack-20f9af9b8a404d5cb022ac6fe87f21f5)" by [Comrade1280](https://sketchfab.com/comrade1280) (스포츠카·SUV)
   - "[2001 Crown Victoria Taxi Game Prop](https://sketchfab.com/3d-models/2001-crown-victoria-taxi-game-prop-2429a825ff1646568e8e6e1453f9c501)" by [8sianDude](https://sketchfab.com/haoliu95)
   - "[2001 Crown Victoria Police Interceptor Game Prop](https://sketchfab.com/3d-models/2001-crown-victoria-police-interceptor-game-prop-9f30d360cee343efb5a441978ddb57bd)" by [8sianDude](https://sketchfab.com/haoliu95)
+  - "[Mazda RX-7 FD](https://sketchfab.com/3d-models/mazda-rx-7-fd-d35ff630df614771b82e7b2f59035b1e)", "[Mazda RX-7 FC](https://sketchfab.com/3d-models/mazda-rx-7-fc-8ac0df459f514950ab83ac37109a06ab)", "[Nissan Skyline R34 GT-R](https://sketchfab.com/3d-models/nissan-skyline-r34-gt-r-ff8fb2251dfa4bb9979e7022c5a6666c)", "[Honda NSX 1990](https://sketchfab.com/3d-models/honda-nsx-1990-1cc15628a00a4739a6b6c01128927c8d)", "[Mercedes-Benz 300 SL Gullwing](https://sketchfab.com/3d-models/mercedes-benz-300-sl-gullwing-505241c829c540a4921533000736904e)", "[Mercedes Benz G-class W263](https://sketchfab.com/3d-models/mercedes-benz-g-class-w263-1a2a52b16cad4e618af347461817895c)" by [Lexyc16](https://sketchfab.com/Lexyc16)
+  - "[1965 Ford Mustang](https://sketchfab.com/3d-models/1965-ford-mustang-7e93cc22b96a4788897a513374ef4486)", "[Dodge Charger Police NYPD](https://sketchfab.com/3d-models/dodge-charger-police-nypd-578e2bfb9c8f415d932527a938e2fc64)" by [David_Holiday](https://sketchfab.com/David_Holiday)
+  - "[Toyota Supra 2.5 GT Twin Turbo (A70)](https://sketchfab.com/3d-models/toyota-supra-25-gt-twin-turbo-a70-6d002956a62a4e1085c6aab41b088ab1)" by [GT Cars: Hyperspeed](https://sketchfab.com/Car2022)
   - 라이선스: [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/), 원본 정보는 `Assets/_Project/ThirdParty/Sketchfab/*/license.txt`
 - PBR 텍스처(도로·보도·건물 외벽): [ambientCG](https://ambientcg.com) (CC0)
 - HDRI 하늘·거리 소품: [Poly Haven](https://polyhaven.com) (CC0)

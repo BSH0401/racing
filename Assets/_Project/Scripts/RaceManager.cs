@@ -17,6 +17,9 @@ namespace Racing
 
         public TrackPath track;
         public Racer[] racers;
+        [Tooltip("Inactive cars holding the garage models no racer drives; bodies are swapped in from here.")]
+        public Racer[] spares = new Racer[0];
+        public IEnumerable<Racer> CarPool { get { foreach (var r in racers) yield return r; foreach (var r in spares) yield return r; } }
         public ChaseCamera chaseCamera;
         public RaceHUD hud;
         public ChaseMode chase;
@@ -85,7 +88,7 @@ namespace Racing
             foreach (var r in racers) if (r.isPlayer) Player = r;
             // The player's chosen garage car (dev: -car <id> forces any car).
             string forced = DevFlags.Get("-car");
-            if (Player) Garage.Equip(Player, racers, string.IsNullOrEmpty(forced) ? Garage.Selected : forced);
+            if (Player) Garage.Equip(Player, CarPool, string.IsNullOrEmpty(forced) ? Garage.Selected : forced);
             int cpCount = Mathf.Max(8, Mathf.RoundToInt(track.Length / 110f));
             checkpoints = new int[cpCount];
             for (int k = 0; k < cpCount; k++) checkpoints[k] = track.Wrap(track.StartIndex + Mathf.RoundToInt(k * track.Count / (float)cpCount));

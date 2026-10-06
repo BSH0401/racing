@@ -9,11 +9,13 @@ namespace Racing
         public string id, displayName, tagline;
         public int price;
         public float maxSpeed, acceleration, tireGrip, rearDriveShare, mass;
+        [Tooltip("Police car: used for the cops in Escape. lightBar = the model has its own roof lights.")]
+        public bool police, lightBar;
 
         // 0..1 ratings for the garage bars.
         public float SpeedRating => Mathf.InverseLerp(48f, 66f, maxSpeed);
         public float AccelRating => Mathf.InverseLerp(9f, 15f, acceleration);
-        public float GripRating => Mathf.InverseLerp(1.3f, 1.7f, tireGrip);
+        public float GripRating => Mathf.InverseLerp(1.3f, 1.75f, tireGrip);
     }
 
     // Car line-up, credits and unlocks (saved in PlayerPrefs), and swapping a car body between racers.
@@ -21,18 +23,28 @@ namespace Racing
     {
         public static readonly CarSpec[] Cars =
         {
-            new CarSpec { id = "BMW_M3_E30", displayName = "BMW M3 E30", tagline = "Balanced rear-drive classic",
-                price = 0, maxSpeed = 56f, acceleration = 11.5f, tireGrip = 1.55f, rearDriveShare = 0.65f, mass = 1200f },
-            new CarSpec { id = "CrownVic_Taxi", displayName = "Crown Victoria Taxi", tagline = "Heavy, soft, unstoppable",
-                price = 1500, maxSpeed = 54f, acceleration = 10.5f, tireGrip = 1.45f, rearDriveShare = 0.7f, mass = 1450f },
-            new CarSpec { id = "Pack_SUV", displayName = "Street SUV", tagline = "Punchy off the line, leans in corners",
-                price = 3000, maxSpeed = 53f, acceleration = 12.8f, tireGrip = 1.4f, rearDriveShare = 0.5f, mass = 1500f },
-            new CarSpec { id = "CrownVic_Police", displayName = "Police Interceptor", tagline = "Built for the long straights",
-                price = 5000, maxSpeed = 61f, acceleration = 12f, tireGrip = 1.5f, rearDriveShare = 0.7f, mass = 1450f },
-            new CarSpec { id = "Pack_Sport", displayName = "Sport Coupe", tagline = "Light and sharp on turn-in",
-                price = 8000, maxSpeed = 62f, acceleration = 13.5f, tireGrip = 1.6f, rearDriveShare = 0.6f, mass = 1150f },
-            new CarSpec { id = "Porsche_930", displayName = "Porsche 911 Turbo", tagline = "Fastest of all - tail-happy",
-                price = 12000, maxSpeed = 66f, acceleration = 14.5f, tireGrip = 1.68f, rearDriveShare = 0.8f, mass = 1150f },
+            Spec("BMW_M3_E30", "BMW M3 E30", "Balanced rear-drive classic", 0, 56f, 11.5f, 1.55f, 0.65f, 1200f),
+            Spec("CrownVic_Taxi", "Crown Victoria Taxi", "Heavy, soft, unstoppable", 1500, 54f, 10.5f, 1.45f, 0.7f, 1450f),
+            Spec("Mazda_RX7_FC", "Mazda RX-7 FC", "Light and cheap - a drifter's first car", 2000, 55f, 11.8f, 1.52f, 0.75f, 1150f),
+            Spec("Pack_SUV", "Street SUV", "Punchy off the line, leans in corners", 3000, 53f, 12.8f, 1.4f, 0.5f, 1500f),
+            Spec("Ford_Mustang", "Ford Mustang '65", "V8 muscle - loves to slide", 4000, 58f, 12.6f, 1.42f, 0.8f, 1350f),
+            Spec("Mercedes_G", "Mercedes G-Class", "A brick that shoves everything aside", 4500, 52f, 12f, 1.42f, 0.5f, 1700f),
+            Spec("CrownVic_Police", "Police Interceptor", "Built for the long straights", 5000, 61f, 12f, 1.5f, 0.7f, 1450f, police: true, lightBar: true),
+            Spec("Dodge_Charger_Police", "Charger Pursuit", "Modern cop muscle", 6500, 62f, 12.8f, 1.5f, 0.7f, 1500f, police: true, lightBar: true),
+            Spec("Toyota_Supra_A70", "Toyota Supra A70", "Turbo GT with long legs", 7000, 60f, 13f, 1.55f, 0.7f, 1300f),
+            Spec("Pack_Sport", "Sport Coupe", "Light and sharp on turn-in", 8000, 62f, 13.5f, 1.6f, 0.6f, 1150f),
+            Spec("Mercedes_300SL", "Mercedes 300 SL", "Gullwing grand tourer", 9000, 61f, 12.5f, 1.5f, 0.7f, 1250f),
+            Spec("Mazda_RX7_FD", "Mazda RX-7 FD", "Rotary screamer, nimble and quick", 10000, 62f, 13.8f, 1.62f, 0.75f, 1200f),
+            Spec("Honda_NSX", "Honda NSX", "Mid-engine precision", 11000, 63f, 13.6f, 1.66f, 0.7f, 1250f),
+            Spec("Porsche_930", "Porsche 911 Turbo", "Brutal top speed - tail-happy", 12000, 66f, 14.5f, 1.68f, 0.8f, 1150f),
+            Spec("Nissan_R34", "Nissan Skyline R34", "All-wheel-drive grip monster", 14000, 64f, 14.6f, 1.72f, 0.45f, 1400f),
+        };
+
+        static CarSpec Spec(string id, string name, string tagline, int price, float speed, float accel, float grip,
+            float rear, float mass, bool police = false, bool lightBar = false) => new CarSpec
+        {
+            id = id, displayName = name, tagline = tagline, price = price, maxSpeed = speed, acceleration = accel,
+            tireGrip = grip, rearDriveShare = rear, mass = mass, police = police, lightBar = lightBar,
         };
 
         // Credits for a finish position (1-based), scaled by race length.
@@ -117,7 +129,7 @@ namespace Racing
         }
 
         // Gives the player the car with this id, handing the player's current car to whoever drove it.
-        public static void Equip(Racer player, Racer[] racers, string id)
+        public static void Equip(Racer player, System.Collections.Generic.IEnumerable<Racer> racers, string id)
         {
             if (player.GetComponent<CarController>().carId == id) return;
             foreach (var r in racers)

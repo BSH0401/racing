@@ -30,6 +30,8 @@ namespace Racing
 
         readonly List<Racer> police = new List<Racer>();
         readonly List<Racer> reserve = new List<Racer>();
+        // Body swaps made to put the cops in police cars, undone by Restore().
+        readonly List<(Racer a, Racer b)> swaps = new List<(Racer, Racer)>();
         float elapsed, lostTimer, hitCooldown, release;
 
         const float LoseDistance = 300f;
@@ -82,6 +84,27 @@ namespace Racing
                         reserve.Add(r);
                     }
                 }
+                DressPolice(others);
+                foreach (var r in police) Siren(r, true);
+            }
+        }
+
+        // The first cops (and the first reinforcements) drive the real police cars when the player isn't in one.
+        void DressPolice(List<Racer> units)
+        {
+            var policeIds = new List<string>();
+            foreach (var spec in Garage.Cars) if (spec.police && spec.id != Player.car.carId) policeIds.Add(spec.id);
+            int next = 0;
+            foreach (var id in policeIds)
+            {
+                Racer holder = null;
+                foreach (var r in race.CarPool) if (r.GetComponent<CarController>().carId == id) holder = r; // spares never ran Awake
+                if (!holder || units.Contains(holder)) continue; // missing, or already a cop
+                while (next < units.Count && Garage.Find(units[next].car.carId).police) next++;
+                if (next >= units.Count) break;
+                Garage.Swap(units[next], holder);
+                swaps.Add((units[next], holder));
+                next++;
             }
         }
 
@@ -110,7 +133,7 @@ namespace Racing
             if (!s) return;
             s.red = sirenRed;
             s.blue = sirenBlue;
-            s.Set(on);
+            s.Set(on, !Garage.Find(r.car.carId).lightBar);
         }
 
         // Back to normal: everyone active, no sirens, no chase drivers.
@@ -120,6 +143,8 @@ namespace Racing
             Target = null;
             police.Clear();
             reserve.Clear();
+            for (int i = swaps.Count - 1; i >= 0; i--) Garage.Swap(swaps[i].a, swaps[i].b);
+            swaps.Clear();
             foreach (var r in race.racers)
             {
                 r.gameObject.SetActive(true);
@@ -154,7 +179,7 @@ namespace Racing
         {
             Distance = Flat(Target.transform.position - Player.transform.position).magnitude;
             // The suspect eases off when far ahead and floors it when the player is close.
-            Target.ai.speedScale = Mathf.Lerp(1.02f, 0.84f, Mathf.InverseLerp(40f, 260f, Distance));
+            Target.ai.speedScale = Player.car.maxSpeed / Mathf.Max(1f, Target.car.maxSpeed) * Mathf.Lerp(1.02f, 0.84f, Mathf.InverseLerp(40f, 260f, Distance));
             lostTimer = Distance > LoseDistance ? lostTimer + dt : 0f;
             if (lostTimer > 6f) End(false, "SUSPECT ESCAPED", "The suspect got away.");
             else if (TimeLeft <= 0f) End(false, "OUT OF TIME", "The suspect is still on the loose.");
@@ -186,7 +211,9 @@ namespace Racing
             {
                 float d = Flat(r.transform.position - Player.transform.position).magnitude;
                 nearest = Mathf.Min(nearest, d);
-                r.chaser.speedScale = (d > 160f ? 1.12f : 1f) * race.DifficultyScale;
+                // Cop top speed follows the player's car (not their own body), so every car is fair game.
+                float match = Player.car.maxSpeed / Mathf.Max(1f, r.car.maxSpeed);
+                r.chaser.speedScale = match * (d > 160f ? 1.1f : 0.97f) * race.DifficultyScale;
             }
             Distance = nearest;
 

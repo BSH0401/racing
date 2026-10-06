@@ -1,0 +1,258 @@
+fileFormatVersion: 2
+guid: 88eeb881be807814d819403dc96ced79
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 715df9372183c47e389bb6e19fbc3b52, type: 3}
+  editorImportSettings:
+    generateSecondaryUVSet: 0
+  importSettings:
+    nodeNameMethod: 1
+    animationMethod: 2
+    generateMipMaps: 1
+    texturesReadable: 0
+    defaultMinFilterMode: 9729
+    defaultMagFilterMode: 9729
+    anisotropicFilterLevel: 1
+  instantiationSettings:
+    mask: -1
+    layer: 0
+    skinUpdateWhenOffscreen: 1
+    lightIntensityFactor: 1
+    sceneObjectCreation: 2
+  assetDependencies:
+  - type: 0
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\Toyota_Supra_A70.bin
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\Toyota_Supra_A70.bin
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\25twinturboBadge1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\25twinturboBadge1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\25twinturboBadge1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\25twinturboBadge1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Backseats1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Backseats1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Backseats21Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Backseats21Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Brake1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Brake1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Brake1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Brake1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Carpet1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Carpet1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Clutch1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Clutch1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Clutch1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Clutch1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\ExhaustTemperature1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\ExhaustTemperature1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\FoglightGlass1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\FoglightGlass1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\FoglightGlass1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\FoglightGlass1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Frontseats1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Frontseats1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\GimbalineDualExhaust1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\GimbalineDualExhaust1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\GimbalineDualExhaust1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\GimbalineDualExhaust1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Gaugecluster1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Gaugecluster1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Glass1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Glass1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Glass1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Glass1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Handbrake1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Handbrake1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Handbrake1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Handbrake1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Headunit1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Headunit1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Interior4Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Interior4Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Interior4Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Interior4Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Lock1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Lock1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Lock1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Lock1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Lock2Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Lock2Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Lock2Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Lock2Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\OilPressure1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\OilPressure1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Part3Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Part3Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\ShiftKnob1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\ShiftKnob1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\SteerColumb1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\SteerColumb1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\SteerColumb1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\SteerColumb1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\SteeringWheel1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\SteeringWheel1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Supra1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Supra1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Supra1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Supra1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Taillightglass1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Taillightglass1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Taillightglass2Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Taillightglass2Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Taillightglass2Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Taillightglass2Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Toyota1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Toyota1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Toyota1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Toyota1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Throttle1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Throttle1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Throttle1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Throttle1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Trunk1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Trunk1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Turbo1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Turbo1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Turbo1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Turbo1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\TurnSignalGlass1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\TurnSignalGlass1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\TurnSignalGlass1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\TurnSignalGlass1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\TurnSignalGlass2Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\TurnSignalGlass2Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\TurnSignalGlass2Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\TurnSignalGlass2Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\WaterTemperature1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\WaterTemperature1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\BrakeCaliper1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\BrakeCaliper1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\BrakeCaliper1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\BrakeCaliper1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\BrakeDisc1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\BrakeDisc1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Color1Mtl_metallicRoughness.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Color1Mtl_metallicRoughness.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Color2Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Color2Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Color2Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Color2Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Interior2Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Interior2Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Koyoradiator1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Koyoradiator1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Meshpart1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Meshpart1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Meshpart1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Meshpart1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Meshpart2Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Meshpart2Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Meshpart2Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Meshpart2Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Rim1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Rim1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\T2Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\T2Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\T2Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\T2Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\T3Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\T3Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\T3Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\T3Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Textured1Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Textured1Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Textured1Mtl_normal.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Textured1Mtl_normal.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Textured1Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Textured1Mtl_baseColor.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Textured1Mtl_metallicRoughness.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Textured1Mtl_metallicRoughness.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Throttle2Mtl_emissive.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Throttle2Mtl_emissive.png
+  - type: 1
+    originalUri: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Throttle2Mtl_baseColor.png
+    assetPath: Assets\_Project\ThirdParty\Sketchfab\Toyota_Supra_A70\textures\Throttle2Mtl_baseColor.png
+  reportItems:
+  - type: 2
+    code: 20
+    messages:
+    - KHR_materials_emissive_strength
+  - type: 2
+    code: 20
+    messages:
+    - KHR_materials_specular

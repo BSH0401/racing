@@ -25,16 +25,28 @@ namespace Racing
                 ("front", new Vector3(-4f, 1.6f, 5f)),
                 ("rear", new Vector3(3.5f, 1.4f, -5f)),
             };
-            for (int i = 0; i < race.racers.Length; i++)
+            // -showall: every garage model in turn on the player's car; otherwise each racer as it is.
+            bool all = DevFlags.Has("-showall");
+            int count = all ? Garage.Cars.Length : race.racers.Length;
+            for (int i = 0; i < count; i++)
             {
-                var car = race.racers[i].transform;
+                Racer racer = all ? race.Player : race.racers[i];
+                string label = racer.racerName;
+                if (all)
+                {
+                    racer = race.Player;
+                    Garage.Equip(racer, race.CarPool, Garage.Cars[i].id);
+                    label = Garage.Cars[i].id;
+                    yield return new WaitForSeconds(0.3f);
+                }
+                var car = racer.transform;
                 foreach (var v in views)
                 {
                     cam.transform.position = car.TransformPoint(v.offset);
                     cam.transform.LookAt(car.position + car.up * 0.6f);
                     yield return null;
                     yield return new WaitForEndOfFrame();
-                    ScreenCapture.CaptureScreenshot(Path.Combine(dir, $"car{i}_{race.racers[i].racerName}_{v.name}.png"));
+                    ScreenCapture.CaptureScreenshot(Path.Combine(dir, $"car{i:00}_{label}_{v.name}.png"));
                     yield return null;
                 }
             }

@@ -1,0 +1,11 @@
+Model Information:
+* title:	Dodge Charger Police NYPD
+* source:	https://sketchfab.com/3d-models/dodge-charger-police-nypd-578e2bfb9c8f415d932527a938e2fc64
+* author:	David_Holiday (https://sketchfab.com/David_Holiday)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Dodge Charger Police NYPD" (https://sketchfab.com/3d-models/dodge-charger-police-nypd-578e2bfb9c8f415d932527a938e2fc64) by David_Holiday (https://sketchfab.com/David_Holiday) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

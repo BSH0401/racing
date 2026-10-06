@@ -230,6 +230,20 @@ namespace Racing.EditorTools
             }
             racers[Drivers.Length] = CreateCar("You", PlayerModel, PlayerColor, true, carPhysics);
 
+            // Every other garage car exists as an inactive spare whose body can be swapped onto a racer.
+            var spares = new System.Collections.Generic.List<Racer>();
+            var spareRoot = new GameObject("SpareCars").transform;
+            foreach (var spec in Garage.Cars)
+            {
+                bool used = spec.id == PlayerModel;
+                foreach (var d in Drivers) used |= d.model == spec.id;
+                if (used) continue;
+                var spare = CreateCar("Spare_" + spec.id, spec.id, Color.gray, false, carPhysics);
+                spare.transform.SetParent(spareRoot, false);
+                spare.gameObject.SetActive(false);
+                spares.Add(spare);
+            }
+
             // Cameras.
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
             var cam = camGo.AddComponent<Camera>();
@@ -262,6 +276,7 @@ namespace Racing.EditorTools
             hud.race = rm;
             rm.track = path;
             rm.racers = racers;
+            rm.spares = spares.ToArray();
             rm.chaseCamera = chase;
             rm.hud = hud;
             rm.laps = 2;
