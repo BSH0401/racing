@@ -226,26 +226,39 @@ namespace Racing
             else if (TimeLeft <= 0f) End(true, "ESCAPED", "You outlasted the police.");
         }
 
+        // Reinforcements appear on a road node 170-320 m away, preferably behind the player,
+        // facing along the road towards them.
         void SpawnBehindPlayer(Racer r)
         {
             Vector3 pp = Player.transform.position;
             Vector3 fwd = Flat(Player.transform.forward).normalized;
-            Vector3 best = Vector3.zero;
+            int best = -1;
             float bestScore = float.MinValue;
-            for (int i = 0; i < CityLayout.Lines; i++)
-                for (int j = 0; j < CityLayout.Lines; j++)
+            var graph = WorldLayout.Graph;
+            for (int i = 0; i < graph.Count; i++)
+            {
+                Vector3 c = graph[i].pos;
+                float d = Flat(c - pp).magnitude;
+                if (d < 170f || d > 320f) continue;
+                float score = -Vector3.Dot(Flat(c - pp).normalized, fwd) - Mathf.Abs(d - 230f) / 200f;
+                if (score > bestScore) { bestScore = score; best = i; }
+            }
+            Vector3 pos = best >= 0 ? graph[best].pos : pp - fwd * 220f;
+            Vector3 dir = Flat(pp - pos).normalized;
+            if (best >= 0)
+            {
+                // Face along the road edge that heads most towards the player.
+                float bestDot = -2f;
+                foreach (int nb in graph[best].next)
                 {
-                    Vector3 c = CityLayout.Intersection(i, j);
-                    float d = Flat(c - pp).magnitude;
-                    if (d < 170f || d > 320f) continue;
-                    float score = -Vector3.Dot(Flat(c - pp).normalized, fwd) - Mathf.Abs(d - 230f) / 200f;
-                    if (score > bestScore) { bestScore = score; best = c; }
+                    Vector3 e = Flat(graph[nb].pos - pos).normalized;
+                    float dot = Vector3.Dot(e, Flat(pp - pos).normalized);
+                    if (dot > bestDot) { bestDot = dot; dir = e; }
                 }
-            if (bestScore == float.MinValue) best = pp - fwd * 220f;
-            Vector3 dir = Flat(pp - best);
-            dir = Mathf.Abs(dir.x) > Mathf.Abs(dir.z) ? new Vector3(Mathf.Sign(dir.x), 0f, 0f) : new Vector3(0f, 0f, Mathf.Sign(dir.z));
-            r.car.Teleport(best + Vector3.up * 0.8f, Quaternion.LookRotation(dir));
-            r.ResetProgress(race.track.FindClosest(best));
+            }
+            pos.y = WorldLayout.Height(pos.x, pos.z);
+            r.car.Teleport(pos + Vector3.up * 0.8f, Quaternion.LookRotation(dir));
+            r.ResetProgress(race.track.FindClosest(pos));
             r.car.InputLocked = false;
         }
 

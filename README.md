@@ -3,7 +3,9 @@
 Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 
 ## 게임 내용
-- 언덕이 있는 오픈 도심 맵: 9×9 도로 격자(블록 96m), 4차선 도로·중앙선·횡단보도·연석·보도, 빌딩 블록과 공원, 가로등, 도시 외곽 방벽
+- 약 3.8km × 3.8km 오픈 월드: 가운데 언덕 도심(9×9 도로 격자, 블록 96m, 4차선 도로·횡단보도·연석·보도·빌딩·공원·가로등)과 주변 시골 지형(구릉, 숲)
+- 고속도로: 도심을 둘러싼 약 7.5km 순환 고속도로, 편도 3차로 + 중앙분리대·가드레일·가로등, 경사 제한된 노면 높이(절토·성토 자동 생성)
+- 국도: 도심 동·서·남·북 출구에서 고속도로까지 이어지는 굽은 2차로 도로 4개 (합류 지점은 중앙분리대 개방)
 - GTA 스트리트 레이스 방식: 도시를 도는 약 2.6km 경로에 체크포인트 24개, 순서대로 통과(지름길 가능), 다음 체크포인트 광선 표시
 - 플레이어를 따라 회전하는 레이더식 미니맵(경로선·체크포인트 표시)
 - 메인 화면: 배경에서 차들이 자동 주행하고 시네마틱 카메라가 중계 (START / MODE / GARAGE / SETTINGS / CONTROLS / QUIT, 마우스 지원)
@@ -31,7 +33,8 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
   | Porsche 911 Turbo | 12,000 CR | 최고속도 최강, 뒤가 잘 미끄러짐 |
   | Nissan Skyline R34 | 14,000 CR | 4륜구동 그립 최강 |
 - 상금: 1~6위 2,000/1,400/1,000/700/500/300 CR (2랩 기준, 랩 수에 비례). 레이스에 나오는 6대 외의 차는 예비 차체로 보관되다가 선택하면 교체된다. 도주 모드 경찰은 실제 경찰차(Charger·크라운 빅토리아)를 우선 사용
-- 설정: 랩 수(1~10), 시간대(낮/밤), AI 난이도(EASY/NORMAL/HARD) — 저장됨
+- 설정: 코스(CITY 2.6km / GRAND 5.4km: 도심→동쪽 국도→고속도로→북쪽 국도→도심), 랩 수(1~10), 시간대(낮/밤), AI 난이도, 볼륨 — 저장됨
+- 도주 모드 경찰은 도심·국도·고속도로 전체 도로망에서 길찾기(A*)로 추격
 - 기록: 베스트 랩, 최고 순위 저장 및 메인 화면 표시
 - 플레이어 1명 + AI 5명
 - GTA5 스타일 차량 물리: 슬립각 타이어 모델, 서스펜션 하중 이동, 후륜 위주 구동 + 트랙션 컨트롤, 자동 카운터스티어·자세 안정화, 차체 롤/피치 연출, 핸드브레이크 드리프트
@@ -62,7 +65,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 3. 메뉴 **Racing → Setup Scene**: 씬·머티리얼을 코드(`Assets/_Project/Editor/RacingSetup.cs`)로 다시 생성.
 4. 메뉴 **Racing → Build Windows**: `Builds/Windows/Racing.exe` 생성.
 
-도시 지형·도로 격자는 `CityLayout`(높이 함수, 블록 크기), 레이스 경로는 `RacingSetup.RouteIntersections`(교차로 좌표)로 정해지며, 도시 메쉬는 `TrackBuilder`가 실행 시 생성한다.
+도시 지형·도로 격자는 `CityLayout`, 시골 지형·고속도로·국도·경찰 길찾기 그래프는 `WorldLayout`, 레이스 경로는 `RacingSetup.RouteIntersections`/`GrandRoute()`로 정해지며, 모든 메쉬는 `TrackBuilder`(+`TrackBuilder.World.cs`)가 실행 시 생성한다.
 
 ## 개발용 실행 옵션
 `-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-showcase <폴더>` (차량별 측면·전면·후면 스크린샷 후 종료, `-showall`이면 차고 15종 전부), `-mode race|pursuit|escape`, `-logchase`, `-car <id>` (플레이어 차 강제), `-garage N` (차고 화면 N번 차로 열기), `-credits N`, `-lookyaw N` (자유 시점 각도 고정), `-logrespawns`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`

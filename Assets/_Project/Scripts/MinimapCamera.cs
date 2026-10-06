@@ -34,6 +34,10 @@ namespace Racing
             f.y = 0f;
             if (f.sqrMagnitude > 0.001f) yaw = Mathf.LerpAngle(yaw, Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg, 1f - Mathf.Exp(-6f * Time.unscaledDeltaTime));
             transform.SetPositionAndRotation(follow.position + Vector3.up * 250f, Quaternion.Euler(90f, yaw, 0f));
+            // Zoom out at speed (highway) so the road ahead stays on the radar.
+            var body = follow.GetComponent<Rigidbody>();
+            float speed = body ? body.linearVelocity.magnitude : 0f;
+            cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, range * Mathf.Lerp(1f, 2f, Mathf.InverseLerp(20f, 55f, speed)), 1f - Mathf.Exp(-2f * Time.unscaledDeltaTime));
         }
     }
 }

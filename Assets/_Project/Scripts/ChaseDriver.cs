@@ -1,21 +1,23 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Racing
 {
-    // Pursuit AI for the chase modes: drives the city street grid towards a target car, turning at
-    // the intersections that lead to it (the grid is complete, so going straight then turning always
-    // works), and rams it directly once it is close and in sight.
+    // Pursuit AI for the chase modes: plans a route to the target over the road graph (city streets,
+    // national roads and both highway carriageways, WorldLayout.Graph), follows it with corner speed
+    // planning, and rams the target directly once it is close and in sight.
     [RequireComponent(typeof(CarController))]
     public class ChaseDriver : MonoBehaviour
     {
         [System.NonSerialized] public Racer target;
         [System.NonSerialized] public float speedScale = 1f;
-        public float cornerSpeed = 13f;
+        public float cornerGrip = 1.3f;
         public float directRange = 45f;
 
         CarController car;
-        bool alongZ; // driving a north-south street (x = const)
-        float stuckTime, reverseTime;
+        readonly List<Vector3> path = new List<Vector3>();
+        int pathPos;
+        float replan, stuckTime, reverseTime;
 
         const int SightMask = ~((1 << 2) | (1 << 31)); // ignore cars and minimap-only objects
 
@@ -24,14 +26,14 @@ namespace Racing
         void OnEnable()
         {
             if (!car) car = GetComponent<CarController>();
-            alongZ = Mathf.Abs(transform.forward.z) >= Mathf.Abs(transform.forward.x);
+            path.Clear();
+            replan = 0f;
         }
-
-        static float Line(float v) => Mathf.Clamp(Mathf.Round(v / CityLayout.Pitch), 0, CityLayout.Lines - 1) * CityLayout.Pitch;
 
         void FixedUpdate()
         {
             if (!target || car.InputLocked) return;
+            float dt = Time.fixedDeltaTime;
             Vector3 p = transform.position;
             Vector3 q = target.transform.position;
             float dist = Flat(q - p).magnitude;
@@ -42,59 +44,42 @@ namespace Racing
             float targetSpeed = top;
             Vector3 aim;
 
-            float lx = Line(p.x), lz = Line(p.z);
-            bool onX = Mathf.Abs(p.x - lx) < CityLayout.RoadHalf + 3f;
-            bool onZ = Mathf.Abs(p.z - lz) < CityLayout.RoadHalf + 3f;
-
             if (dist < directRange && Visible(p, q))
             {
                 aim = qLead;
-            }
-            else if (!onX && !onZ)
-            {
-                // Off the streets (park, sidewalk): get back onto the nearest one.
-                aim = Mathf.Abs(p.x - lx) < Mathf.Abs(p.z - lz)
-                    ? new Vector3(lx, p.y, p.z + Mathf.Sign(qLead.z - p.z) * 15f)
-                    : new Vector3(p.x + Mathf.Sign(qLead.x - p.x) * 15f, p.y, lz);
-                targetSpeed = Mathf.Min(top, 12f);
+                path.Clear();
             }
             else
             {
-                if (onX && !onZ) alongZ = true;
-                else if (onZ && !onX) alongZ = false;
-                float tx = Line(qLead.x), tz = Line(qLead.z);
+                replan -= dt;
+                if (replan <= 0f || path.Count == 0 || pathPos >= path.Count)
+                {
+                    replan = 0.6f;
+                    Plan(p, qLead);
+                }
+                // Advance past waypoints we have reached (or overshot).
+                while (pathPos < path.Count - 1)
+                {
+                    Vector3 a = path[pathPos], b = path[pathPos + 1];
+                    Vector3 ab = Flat(b - a);
+                    if (Flat(p - a).magnitude < 12f || Vector3.Dot(Flat(p - a), ab) > ab.sqrMagnitude * 0.6f) pathPos++;
+                    else break;
+                }
+                aim = LookAhead(p, 10f + Mathf.Abs(speed) * 0.5f);
 
-                // At an intersection: turn onto the street that leads to the target.
-                if (onX && onZ)
+                // Corner speed from the heading change at the coming waypoints.
+                float along = Flat(path[Mathf.Min(pathPos, path.Count - 1)] - p).magnitude;
+                for (int k = pathPos; k < path.Count - 2 && along < 20f + speed * speed / (2f * brake); k++)
                 {
-                    if (alongZ && Mathf.Abs(p.z - tz) < 6f && Mathf.Abs(lx - tx) > 1f) alongZ = false;
-                    else if (!alongZ && Mathf.Abs(p.x - tx) < 6f && Mathf.Abs(lz - tz) > 1f) alongZ = true;
-                }
-
-                bool turning;
-                float turnDist;
-                if (alongZ)
-                {
-                    turning = Mathf.Abs(lx - tx) >= 1f;
-                    float goal = turning ? tz : qLead.z;
-                    float d = goal - p.z;
-                    turnDist = Mathf.Abs(d);
-                    aim = new Vector3(lx, p.y, p.z + Mathf.Sign(d) * Mathf.Min(turnDist, 10f + Mathf.Abs(speed) * 0.5f));
-                    if (turning && turnDist < 14f) aim = new Vector3(lx + Mathf.Sign(tx - lx) * 14f, p.y, tz);
-                }
-                else
-                {
-                    turning = Mathf.Abs(lz - tz) >= 1f;
-                    float goal = turning ? tx : qLead.x;
-                    float d = goal - p.x;
-                    turnDist = Mathf.Abs(d);
-                    aim = new Vector3(p.x + Mathf.Sign(d) * Mathf.Min(turnDist, 10f + Mathf.Abs(speed) * 0.5f), p.y, lz);
-                    if (turning && turnDist < 14f) aim = new Vector3(tx, p.y, lz + Mathf.Sign(tz - lz) * 14f);
-                }
-                if (turning)
-                {
-                    float allowed = Mathf.Sqrt(cornerSpeed * cornerSpeed + 2f * brake * Mathf.Max(0f, turnDist - 10f));
-                    targetSpeed = Mathf.Min(targetSpeed, allowed);
+                    Vector3 d0 = Flat(path[k + 1] - path[k]), d1 = Flat(path[k + 2] - path[k + 1]);
+                    float turn = Vector3.Angle(d0, d1) * Mathf.Deg2Rad;
+                    if (turn > 0.15f)
+                    {
+                        float radius = Mathf.Clamp(Mathf.Min(d0.magnitude, d1.magnitude) * 0.5f / Mathf.Tan(turn * 0.5f), 8f, 400f);
+                        float vCorner = Mathf.Sqrt(cornerGrip * 9.81f * radius);
+                        targetSpeed = Mathf.Min(targetSpeed, Mathf.Sqrt(vCorner * vCorner + 2f * brake * Mathf.Max(0f, along - 8f)));
+                    }
+                    along += d0.magnitude;
                 }
             }
 
@@ -108,12 +93,13 @@ namespace Racing
             else if (speed > targetSpeed + 1.5f) throttle = -Mathf.Clamp01((speed - targetSpeed) / 5f);
             else throttle = 0.35f;
             if (Mathf.Abs(angle) > 50f && speed > 12f) throttle = Mathf.Min(throttle, 0.2f);
+
             // Wedged against something: back out with opposite lock for a moment.
-            stuckTime = throttle > 0.5f && Mathf.Abs(speed) < 1.5f ? stuckTime + Time.fixedDeltaTime : 0f;
+            stuckTime = throttle > 0.5f && Mathf.Abs(speed) < 1.5f ? stuckTime + dt : 0f;
             if (stuckTime > 1.2f) { reverseTime = 1.1f; stuckTime = 0f; }
             if (reverseTime > 0f)
             {
-                reverseTime -= Time.fixedDeltaTime;
+                reverseTime -= dt;
                 car.Throttle = -1f;
                 car.Steer = -Mathf.Sign(angle);
                 car.Handbrake = false;
@@ -121,6 +107,37 @@ namespace Racing
             }
             car.Throttle = throttle;
             car.Handbrake = Mathf.Abs(angle) > 80f && speed > 9f;
+        }
+
+        void Plan(Vector3 from, Vector3 to)
+        {
+            path.Clear();
+            pathPos = 0;
+            int a = WorldLayout.NearestNode(from, transform.forward);
+            int b = WorldLayout.NearestNode(to, Vector3.zero);
+            path.AddRange(WorldLayout.FindPath(a, b));
+            path.Add(to); // finish at the target itself
+        }
+
+        // Point 'ahead' metres further along the path from the closest point on the current leg.
+        Vector3 LookAhead(Vector3 p, float ahead)
+        {
+            if (path.Count == 0) return p + transform.forward * 10f;
+            if (pathPos >= path.Count - 1) return path[path.Count - 1];
+            Vector3 a = path[pathPos], b = path[pathPos + 1];
+            Vector3 ab = b - a;
+            float t = Mathf.Clamp01(Vector3.Dot(Flat(p - a), Flat(ab)) / Mathf.Max(Flat(ab).sqrMagnitude, 1e-3f));
+            Vector3 cur = a + ab * t;
+            float left = ahead;
+            for (int k = pathPos; k < path.Count - 1; k++)
+            {
+                Vector3 s = k == pathPos ? cur : path[k];
+                Vector3 e = path[k + 1];
+                float len = Flat(e - s).magnitude;
+                if (len >= left) return s + (e - s) * (left / Mathf.Max(len, 1e-3f));
+                left -= len;
+            }
+            return path[path.Count - 1];
         }
 
         static bool Visible(Vector3 from, Vector3 to) =>

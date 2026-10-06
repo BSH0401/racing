@@ -68,7 +68,7 @@ namespace Racing
 
         void UpdateLane(RaceManager rm, TrackPath track, float dt)
         {
-            float maxLane = track.roadHalfWidth - 2f;
+            float maxLane = Mathf.Max(0.5f, track.HalfWidth(racer.index) - 2f);
             laneTimer -= dt;
             if (laneTimer <= 0f)
             {

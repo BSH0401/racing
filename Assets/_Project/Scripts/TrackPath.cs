@@ -9,13 +9,16 @@ namespace Racing
     public class TrackPath : MonoBehaviour
     {
         public Vector3[] controlPoints = new Vector3[0];
+        [Tooltip("Optional road half width per control point (falls back to roadHalfWidth).")]
+        public float[] controlHalfWidths = new float[0];
         public float spacing = 2f;
         public float roadHalfWidth = 7f;
         public float startDistance = 60f;
-        [Tooltip("Drape the resampled path onto CityLayout's terrain.")]
+        [Tooltip("Drape the resampled path onto the ground (WorldLayout heights).")]
         public bool followTerrain;
 
         Vector3[] points, tangents, rights;
+        float[] halfWidths;
         float realSpacing, length;
         int startIndex;
         bool built;
@@ -55,6 +58,8 @@ namespace Racing
             tangents = new Vector3[count];
             rights = new Vector3[count];
 
+            halfWidths = new float[count];
+            bool widths = controlHalfWidths != null && controlHalfWidths.Length == n;
             int j = 0;
             for (int i = 0; i < count; i++)
             {
@@ -63,7 +68,9 @@ namespace Racing
                 float seg = cum[j + 1] - cum[j];
                 float t = seg > 1e-5f ? (target - cum[j]) / seg : 0f;
                 points[i] = Vector3.Lerp(dense[j], dense[(j + 1) % d], t);
-                if (followTerrain) points[i].y = CityLayout.Height(points[i].x, points[i].z);
+                if (followTerrain) points[i].y = WorldLayout.Height(points[i].x, points[i].z);
+                int ctrl = j / sub;
+                halfWidths[i] = widths ? Mathf.Min(controlHalfWidths[ctrl % n], controlHalfWidths[(ctrl + 1) % n]) : roadHalfWidth;
             }
 
             for (int i = 0; i < count; i++)
@@ -108,6 +115,7 @@ namespace Racing
         public Vector3 Point(int i) { EnsureBuilt(); return points[Wrap(i)]; }
         public Vector3 Tangent(int i) { EnsureBuilt(); return tangents[Wrap(i)]; }
         public Vector3 Right(int i) { EnsureBuilt(); return rights[Wrap(i)]; }
+        public float HalfWidth(int i) { EnsureBuilt(); return halfWidths[Wrap(i)]; }
 
         public Vector3 FlatTangent(int i)
         {

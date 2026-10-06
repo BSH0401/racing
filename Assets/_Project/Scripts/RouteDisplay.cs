@@ -13,11 +13,10 @@ namespace Racing
 
         Transform beam, ring, blip;
         LineRenderer route;
+        TrackPath shownTrack;
 
         void Start()
         {
-            var track = race.track;
-
             var lineGo = new GameObject("RouteLine");
             lineGo.transform.SetParent(transform, false);
             lineGo.layer = minimapLayer;
@@ -30,9 +29,6 @@ namespace Racing
             route.widthMultiplier = 7f;
             route.numCornerVertices = 2;
             route.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            int step = 3, count = track.Count / step;
-            route.positionCount = count;
-            for (int i = 0; i < count; i++) route.SetPosition(i, track.Point(i * step) + Vector3.up * 4f);
 
             beam = Primitive("CheckpointBeam", PrimitiveType.Cylinder, beamMaterial, worldLayer, new Vector3(2.4f, 20f, 2.4f));
             ring = Primitive("CheckpointRing", PrimitiveType.Cylinder, beamMaterial, worldLayer, new Vector3(RaceManager.CheckpointRadius * 1.3f, 0.04f, RaceManager.CheckpointRadius * 1.3f));
@@ -53,8 +49,18 @@ namespace Racing
             return go.transform;
         }
 
+        // Route line on the minimap, rebuilt when the race route changes.
+        void ShowRoute(TrackPath track)
+        {
+            shownTrack = track;
+            int step = 3, count = track.Count / step;
+            route.positionCount = count;
+            for (int i = 0; i < count; i++) route.SetPosition(i, track.Point(i * step) + Vector3.up * 4f);
+        }
+
         void LateUpdate()
         {
+            if (race.track != shownTrack) ShowRoute(race.track);
             var p = race.Player;
             bool live = p && (race.State == RaceState.Racing || race.State == RaceState.Countdown);
             if (race.Chasing)

@@ -68,6 +68,45 @@ namespace Racing.EditorTools
 
         static Vector3 V3(Vector2 v) => new Vector3(v.x, 0f, v.y);
 
+        // GRAND route: out of the city on the east national road, a quarter of the highway ring
+        // anticlockwise (outer carriageway), back in on the north national road. Same start line as
+        // the city route. Returns control points and per-point road half widths.
+        static (Vector3[] pts, float[] widths) GrandRoute()
+        {
+            var pts = new System.Collections.Generic.List<Vector3>();
+            var widths = new System.Collections.Generic.List<float>();
+            float city = CityLayout.RoadHalf, nat = WorldLayout.NationalHalf - 0.5f, hwy = 7f;
+            Vector2 G(int i, int j) => new Vector2(i, j) * CityLayout.Pitch;
+            void Add(Vector3 p, float w) { pts.Add(p); widths.Add(w); }
+            void Corner(Vector2 prev, Vector2 c, Vector2 next)
+            {
+                const float r = 12f;
+                Vector2 din = (c - prev).normalized, dout = (next - c).normalized;
+                if (Vector2.Distance(prev, c) > r * 4f + 10f) Add(V3(c - din * r * 2f), city);
+                Add(V3(c - din * r), city);
+                Add(V3(c + dout * r), city);
+                if (Vector2.Distance(c, next) > r * 4f + 10f) Add(V3(c + dout * r * 2f), city);
+            }
+
+            var east = WorldLayout.National[0];
+            var north = WorldLayout.National[1];
+            var ring = WorldLayout.Highway;
+            int jE = WorldLayout.Junctions[0], jN = WorldLayout.Junctions[1];
+
+            Corner(G(4, 1), G(1, 1), G(1, 4));
+            Corner(G(1, 1), G(1, 4), G(8, 4));
+            Add(V3(G(8, 4)), city);
+            for (int i = 0; i < east.Count - 1; i += 5) Add(east.pts[i], nat);
+            Add(east.pts[east.Count - 1], nat);
+            for (int k = jE + 15; k <= jN - 15; k += 5)
+                Add(ring.pts[k] + ring.right[k] * WorldLayout.CarriageCentre, hwy);
+            for (int i = north.Count - 1; i > 0; i -= 5) Add(north.pts[i], nat);
+            Add(north.pts[0], nat);
+            Add(V3(G(4, 8)), city);
+            Corner(G(4, 8), G(4, 1), G(1, 1));
+            return (pts.ToArray(), widths.ToArray());
+        }
+
         // AI drivers, their Sketchfab car (see ThirdParty/Sketchfab) and minimap/HUD colour;
         // the player drives the BMW M3 E30.
         static readonly (string name, string model, float skill, Color color)[] Drivers =
@@ -100,6 +139,8 @@ namespace Racing.EditorTools
             var yellow = Mat("YellowLine", new Color(0.95f, 0.75f, 0.1f), 0.3f);
             var ground = Mat("Ground", new Color(0.3f, 0.42f, 0.24f), 0.05f, 0f, grassTex);
             var grass = Mat("Grass", new Color(0.36f, 0.56f, 0.26f), 0.1f, 0f, grassTex);
+            // Countryside: muted olive meadow so the big open areas don't glow.
+            var countryGrass = Mat("CountryGrass", new Color(0.32f, 0.4f, 0.21f), 0.04f, 0f, grassTex);
             var sidewalk = PbrMat("Sidewalk", "PavingStones150", new Color(0.9f, 0.9f, 0.9f), 0.25f, 0f);
             sidewalk.SetTextureScale("_BaseMap", new Vector2(1f, 2f));
             var curbStone = Mat("CurbStone", new Color(0.62f, 0.61f, 0.58f), 0.15f, 0f, concreteTex);
@@ -192,12 +233,19 @@ namespace Racing.EditorTools
             path.roadHalfWidth = CityLayout.RoadHalf;
             path.startDistance = 120f;
             path.followTerrain = true;
+            var grandGo = new GameObject("GrandRoute");
+            var grand = grandGo.AddComponent<TrackPath>();
+            (grand.controlPoints, grand.controlHalfWidths) = GrandRoute();
+            grand.roadHalfWidth = CityLayout.RoadHalf;
+            grand.startDistance = 120f;
+            grand.followTerrain = true;
             var builder = trackGo.AddComponent<TrackBuilder>();
             builder.road = road;
             builder.line = white;
             builder.yellowLine = yellow;
             builder.sidewalk = sidewalk;
             builder.grass = grass;
+            builder.countryGrass = countryGrass;
             builder.barrier = barrier;
             builder.farGround = ground;
             builder.checkerBlack = black;
@@ -275,6 +323,8 @@ namespace Racing.EditorTools
             var hud = rmGo.AddComponent<RaceHUD>();
             hud.race = rm;
             rm.track = path;
+            rm.routes = new[] { path, grand };
+            rm.routeNames = new[] { "CITY", "GRAND" };
             rm.racers = racers;
             rm.spares = spares.ToArray();
             rm.chaseCamera = chase;
@@ -361,7 +411,7 @@ namespace Racing.EditorTools
             PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneWindows64, false);
             PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneWindows64, new[] { GraphicsDeviceType.Direct3D11 });
             AssetDatabase.SaveAssets();
-            Debug.Log("[Racing] Scene set up: " + ScenePath + ", route length " + path.Length.ToString("F0") + " m");
+            Debug.Log("[Racing] Scene set up: " + ScenePath + ", route length " + path.Length.ToString("F0") + " m, grand route " + grand.Length.ToString("F0") + " m, highway " + WorldLayout.Highway.Length.ToString("F0") + " m");
         }
 
         // Wheel layout of a canonical Sketchfab car (written next to the .gltf by the import script):

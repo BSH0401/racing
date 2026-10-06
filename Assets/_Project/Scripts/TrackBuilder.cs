@@ -9,7 +9,7 @@ namespace Racing
     // and the start gantry on the race route (TrackPath).
     // Everything is rebuilt on enable (edit and play mode) and never saved into the scene.
     [ExecuteAlways, RequireComponent(typeof(TrackPath))]
-    public class TrackBuilder : MonoBehaviour
+    public partial class TrackBuilder : MonoBehaviour
     {
         public Material road, line, yellowLine, sidewalk, curbs, grass, barrier, farGround, checkerBlack, gantry, banner, lampPole, lampHead, trunk, leaves;
         [Header("Buildings: boxes wrapped in photographed facades")]
@@ -48,7 +48,7 @@ namespace Racing
             BuildTerrain(root);
             BuildCurbs(root);
             BuildMarkings(root);
-            BuildBoundary(root);
+            BuildWorld(root);
             BuildBlocks(root);
             BuildLamps(path, root);
             BuildStart(path, root);
@@ -83,10 +83,10 @@ namespace Racing
             MeshObject("Sidewalks", root, grids[1].Build(), true, sidewalk);
             MeshObject("Parks", root, grids[2].Build(), true, grass).AddComponent<TrackSurface>();
 
-            // Distant flat ground below the plateau, seen past the boundary wall.
+            // Distant flat ground beyond the edge of the world, out to the horizon.
             var mb = new MeshBuilder(1);
-            float size = 5000f, c = CityLayout.Size * 0.5f;
-            Vector3 o = new Vector3(c, -10f, c), hx = new Vector3(size * 0.5f, 0f, 0f), hz = new Vector3(0f, 0f, size * 0.5f);
+            float size = 16000f, c = (WorldLayout.Min + WorldLayout.Max) * 0.5f;
+            Vector3 o = new Vector3(c, -90f, c), hx = new Vector3(size * 0.5f, 0f, 0f), hz = new Vector3(0f, 0f, size * 0.5f); // well below the lowest valley
             mb.Quad(0, o - hx - hz, o + hx - hz, o + hx + hz, o - hx + hz, size / 8f, 0f, size / 8f);
             MeshObject("FarGround", root, mb.Build(), false, farGround);
         }
@@ -103,8 +103,25 @@ namespace Racing
             {
                 float edge = k * p + s * r;
                 bool outer = (k == 0 && s < 0) || (k == lines - 1 && s > 0);
-                if (outer) Curb(mb, axis, edge, -r, size + r);
+                if (outer)
+                {
+                    // Gaps where an exit street leaves through this outer edge.
+                    float from = -r;
+                    foreach (var e in CityLayout.ExitStrips)
+                    {
+                        if (e.alongZ == (axis == 0) || edge < e.from - 0.1f || edge > e.to + 0.1f) continue;
+                        Curb(mb, axis, edge, from, e.line * p - r);
+                        from = e.line * p + r;
+                    }
+                    Curb(mb, axis, edge, from, size + r);
+                }
                 else for (int j = 0; j < lines - 1; j++) Curb(mb, axis, edge, j * p + r, (j + 1) * p - r);
+            }
+            foreach (var e in CityLayout.ExitStrips)
+            {
+                int ax = e.alongZ ? 0 : 1;
+                float from = e.from > 0f ? e.from + r : e.from, to = e.from > 0f ? e.to : e.to - r;
+                for (int sd = -1; sd <= 1; sd += 2) Curb(mb, ax, e.line * p + sd * r, from, to);
             }
             MeshObject("Curbs", root, mb.Build(), true, curbs ? curbs : sidewalk);
         }
@@ -161,6 +178,13 @@ namespace Racing
                     }
                 }
             }
+            foreach (var e in CityLayout.ExitStrips)
+            {
+                int ax = e.alongZ ? 0 : 1;
+                float c = e.line * p, from = e.from > 0f ? e.from + r + 1f : e.from, to = e.from > 0f ? e.to : e.to - r - 1f;
+                Stripe(yellow, ax, c - 0.35f, c - 0.15f, from, to, lift);
+                Stripe(yellow, ax, c + 0.15f, c + 0.35f, from, to, lift);
+            }
             MeshObject("Markings", root, white.Build(), false, line);
             MeshObject("CentreLines", root, yellow.Build(), false, yellowLine);
         }
@@ -175,32 +199,6 @@ namespace Racing
                 if (axis == 0) mb.Quad(0, v0, v1, v2, v3, 1f);
                 else mb.Quad(0, v1, v0, v3, v2, 1f);
             }
-        }
-
-        // Concrete wall around the edge of the city.
-        void BuildBoundary(GameObject root)
-        {
-            var mb = new MeshBuilder(1);
-            float min = CityLayout.Min, max = CityLayout.Max;
-            const float step = 4f, height = 3f;
-            for (int side = 0; side < 4; side++)
-            for (float t = min; t < max - 0.01f; t += step)
-            {
-                float t1 = Mathf.Min(t + step, max);
-                Vector3 a, b;
-                switch (side)
-                {
-                    case 0: a = new Vector3(t, 0f, min); b = new Vector3(t1, 0f, min); break;
-                    case 1: a = new Vector3(t, 0f, max); b = new Vector3(t1, 0f, max); break;
-                    case 2: a = new Vector3(min, 0f, t); b = new Vector3(min, 0f, t1); break;
-                    default: a = new Vector3(max, 0f, t); b = new Vector3(max, 0f, t1); break;
-                }
-                Vector3 at = new Vector3(a.x, H(a.x, a.z) + height, a.z), bt = new Vector3(b.x, H(b.x, b.z) + height, b.z);
-                a.y = -12f; b.y = -12f;
-                mb.Quad(0, a, b, bt, at, 1f);
-                mb.Quad(0, b, a, at, bt, 1f);
-            }
-            MeshObject("BoundaryWall", root, mb.Build(), true, barrier);
         }
 
         // ---- Blocks: buildings, plazas and parks ----
@@ -246,7 +244,7 @@ namespace Racing
                 {
                     float cx = x0 + (lx + 0.5f) * lw, cz = z0 + (lz + 0.5f) * ld;
                     bool edge = lx == 0 || lz == 0 || lx == nx - 1 || lz == nz - 1;
-                    if (!edge) continue;
+                    if (!edge || BlocksExit(cx, cz, lw, ld)) continue;
 
                     float w = lw - 1f - R() * 4f, d = ld - 1f - R() * 4f;
                     float lo = float.MaxValue, hi = float.MinValue;
@@ -285,6 +283,20 @@ namespace Racing
             MeshObject("Buildings", root, mb.Build(), true, mats).layer = cityLayer;
             MeshObject("Trunks", root, Combine(trunks), false, trunk).layer = cityLayer;
             MeshObject("Crowns", root, Combine(crowns), false, leaves).layer = cityLayer;
+        }
+
+        // True when a lot of the given size would sit on an exit street or its sidewalks.
+        static bool BlocksExit(float cx, float cz, float w, float d)
+        {
+            float clear = CityLayout.RoadHalf + CityLayout.Sidewalk + 1f;
+            foreach (var e in CityLayout.ExitStrips)
+            {
+                float across = e.alongZ ? cx : cz, halfAcross = (e.alongZ ? w : d) * 0.5f;
+                float along = e.alongZ ? cz : cx, halfAlong = (e.alongZ ? d : w) * 0.5f;
+                if (Mathf.Abs(across - e.line * CityLayout.Pitch) < clear + halfAcross &&
+                    along + halfAlong > e.from && along - halfAlong < e.to) return true;
+            }
+            return false;
         }
 
         // Fire hydrants and bins along the kerbs, concrete barriers lining the start straight.
@@ -569,6 +581,16 @@ namespace Racing
                 verts.Add(v0); verts.Add(v1); verts.Add(v2); verts.Add(v3);
                 uvs.Add(new Vector2(0f, vStart)); uvs.Add(new Vector2(uScale, vStart));
                 uvs.Add(new Vector2(uScale, vEnd)); uvs.Add(new Vector2(0f, vEnd));
+                var t = tris[sub];
+                t.Add(b); t.Add(b + 3); t.Add(b + 2);
+                t.Add(b); t.Add(b + 2); t.Add(b + 1);
+            }
+
+            public void QuadUV(int sub, Vector3 v0, Vector3 v1, Vector3 v2, Vector3 v3, Vector2 u0, Vector2 u1, Vector2 u2, Vector2 u3)
+            {
+                int b = verts.Count;
+                verts.Add(v0); verts.Add(v1); verts.Add(v2); verts.Add(v3);
+                uvs.Add(u0); uvs.Add(u1); uvs.Add(u2); uvs.Add(u3);
                 var t = tris[sub];
                 t.Add(b); t.Add(b + 3); t.Add(b + 2);
                 t.Add(b); t.Add(b + 2); t.Add(b + 1);

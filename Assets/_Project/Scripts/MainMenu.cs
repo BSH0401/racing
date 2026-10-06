@@ -205,6 +205,7 @@ namespace Racing
         void BuildSettings(Transform panel)
         {
             var list = NewPage(Page.Settings, panel);
+            AddItem(Page.Settings, list, "ROUTE", () => race.RouteName, d => race.SetRoute(race.RouteIndex + d));
             AddItem(Page.Settings, list, "LAPS", () => race.laps.ToString(), d => race.SetLaps(Wrap(race.laps + d, 1, 10)));
             AddItem(Page.Settings, list, "TIME", () => race.theme && race.theme.Current == RaceTheme.Night ? "NIGHT" : "DAY", d => { if (race.theme) race.theme.Toggle(); });
             AddItem(Page.Settings, list, "AI", () => race.difficulty.ToString().ToUpper(), d => race.SetDifficulty((Difficulty)Wrap((int)race.difficulty + d, 0, 2)));
@@ -389,7 +390,7 @@ namespace Racing
             if (race)
             {
                 string time = race.theme && race.theme.Current == RaceTheme.Night ? "NIGHT" : "DAY";
-                string what = race.Mode == GameMode.Race ? $"{race.laps} LAPS" : race.Mode.ToString().ToUpper();
+                string what = (race.Mode == GameMode.Race ? $"{race.laps} LAPS" : race.Mode.ToString().ToUpper()) + "  ·  " + race.RouteName;
                 settingsText.text = $"{what}  ·  {time}  ·  AI {race.difficulty.ToString().ToUpper()}";
             }
         }

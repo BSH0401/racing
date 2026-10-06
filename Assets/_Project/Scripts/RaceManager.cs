@@ -16,6 +16,11 @@ namespace Racing
         public static RaceManager Instance { get; private set; }
 
         public TrackPath track;
+        [Tooltip("Selectable race routes (track is set to the chosen one).")]
+        public TrackPath[] routes = new TrackPath[0];
+        public string[] routeNames = new string[0];
+        public int RouteIndex { get; private set; }
+        public string RouteName => RouteIndex < routeNames.Length ? routeNames[RouteIndex] : "CITY";
         public Racer[] racers;
         [Tooltip("Inactive cars holding the garage models no racer drives; bodies are swapped in from here.")]
         public Racer[] spares = new Racer[0];
@@ -89,9 +94,15 @@ namespace Racing
             // The player's chosen garage car (dev: -car <id> forces any car).
             string forced = DevFlags.Get("-car");
             if (Player) Garage.Equip(Player, CarPool, string.IsNullOrEmpty(forced) ? Garage.Selected : forced);
-            int cpCount = Mathf.Max(8, Mathf.RoundToInt(track.Length / 110f));
-            checkpoints = new int[cpCount];
-            for (int k = 0; k < cpCount; k++) checkpoints[k] = track.Wrap(track.StartIndex + Mathf.RoundToInt(k * track.Count / (float)cpCount));
+            if (routes.Length > 0)
+            {
+                RouteIndex = Mathf.Clamp(PlayerPrefs.GetInt("route", 0), 0, routes.Length - 1);
+                string devRoute = DevFlags.Get("-route");
+                for (int i = 0; i < routeNames.Length; i++)
+                    if (devRoute != null && routeNames[i].Equals(devRoute, System.StringComparison.OrdinalIgnoreCase)) RouteIndex = i;
+                track = routes[RouteIndex];
+            }
+            BuildCheckpoints();
             sfx = gameObject.AddComponent<AudioSource>();
             sfx.playOnAwake = false;
             beep = SynthAudio.Tone(660f, 0.18f);
@@ -101,6 +112,7 @@ namespace Racing
         void Start()
         {
             Application.targetFrameRate = 120;
+            if (DevFlags.Has("-validateworld")) WorldLayout.Validate();
             if (DevFlags.Has("-dumpaudio")) { SynthAudio.Dump(DevFlags.Get("-dumpaudio")); Quit(); return; }
             if (DevFlags.Has("-handlingtest"))
             {
@@ -123,6 +135,24 @@ namespace Racing
         }
 
         // ---- Settings (driven by the main menu) ----
+
+        void BuildCheckpoints()
+        {
+            int cpCount = Mathf.Max(8, Mathf.RoundToInt(track.Length / 110f));
+            checkpoints = new int[cpCount];
+            for (int k = 0; k < cpCount; k++) checkpoints[k] = track.Wrap(track.StartIndex + Mathf.RoundToInt(k * track.Count / (float)cpCount));
+        }
+
+        // Switch race route (menu only): the attract-mode cars are put back on the new route's grid.
+        public void SetRoute(int index)
+        {
+            if (routes.Length == 0) return;
+            RouteIndex = (index % routes.Length + routes.Length) % routes.Length;
+            PlayerPrefs.SetInt("route", RouteIndex);
+            track = routes[RouteIndex];
+            BuildCheckpoints();
+            if (State == RaceState.Menu) EnterMenu();
+        }
 
         public void SetLaps(int value)
         {
@@ -393,7 +423,7 @@ namespace Racing
             Vector3 v = car.Body.linearVelocity;
 
             // Fell through the world or left the city.
-            bool lost = pos.y < CityLayout.Height(pos.x, pos.z) - 4f || !CityLayout.InBounds(pos, 2f);
+            bool lost = pos.y < WorldLayout.Height(pos.x, pos.z) - 4f || !WorldLayout.InBounds(pos, 2f);
             r.offTrackTimer = lost ? r.offTrackTimer + dt : 0f;
 
             bool flipped = r.transform.up.y < 0.3f && v.magnitude < 4f;
@@ -415,7 +445,7 @@ namespace Racing
             if (r.offTrackTimer > 0.5f || r.flipTimer > 2f || r.stuckTimer > 3f || (r.ai.enabled && r.reverseTimer > 2.5f))
             {
                 if (DevFlags.Has("-logrespawns"))
-                    Debug.Log($"[Respawn] {r.racerName} t={RaceTime:F1} pos={pos} terrain={CityLayout.Height(pos.x, pos.z):F1} off={r.offTrackTimer:F1} flip={r.flipTimer:F1} stuck={r.stuckTimer:F1} reverse={r.reverseTimer:F1} cp={r.cpPassed}");
+                    Debug.Log($"[Respawn] {r.racerName} t={RaceTime:F1} pos={pos} terrain={WorldLayout.Height(pos.x, pos.z):F1} off={r.offTrackTimer:F1} flip={r.flipTimer:F1} stuck={r.stuckTimer:F1} reverse={r.reverseTimer:F1} cp={r.cpPassed}");
                 Respawn(r);
             }
         }
@@ -499,9 +529,21 @@ namespace Racing
             for (int i = 0; i < Standings.Count; i++) Standings[i].position = i + 1;
         }
 
+        float nextPosLog;
+
         void DevTick()
         {
             float t = Time.unscaledTime;
+            if (DevFlags.Has("-logpos") && State == RaceState.Racing && RaceTime >= nextPosLog)
+            {
+                nextPosLog = RaceTime + DevFlags.GetFloat("-logpos", 10f);
+                foreach (var r in racers)
+                {
+                    Vector3 rp = r.transform.position;
+                    string ground = Physics.Raycast(rp + Vector3.up * 30f, Vector3.down, out var gh, 60f, ~(1 << 2)) ? $"{gh.collider.name}@{gh.point.y:F2}" : "none";
+                    Debug.Log($"[Pos] t={RaceTime:F0} {r.racerName} pos={rp:F1} kmh={r.car.SpeedKmh:F0} idx={r.index} cp={r.cpPassed} lane={track.LateralOffset(rp, r.index):F1} offroad={r.car.OffRoad} top={ground} H={WorldLayout.Height(rp.x, rp.z):F2}");
+                }
+            }
             if (menuStartAt > 0f && t >= menuStartAt && State == RaceState.Menu) { menuStartAt = 0f; StartRace(); }
             if (shotTimes.Count > 0 && t >= shotTimes[0])
             {
@@ -511,7 +553,7 @@ namespace Racing
             if (quitAfter > 0f && t >= quitAfter)
             {
                 if (Player)
-                    Debug.Log($"[Racing] t={RaceTime:F1} state={State} playerPos={Player.position} lap={Player.CurrentLap(laps, CheckpointCount)} cp={Player.cpPassed} finished={Player.finished} best={Player.bestLap:F2}");
+                    Debug.Log($"[Racing] fps={Time.frameCount / Mathf.Max(1f, Time.unscaledTime):F0} t={RaceTime:F1} state={State} playerPos={Player.position} lap={Player.CurrentLap(laps, CheckpointCount)} cp={Player.cpPassed} finished={Player.finished} best={Player.bestLap:F2}");
                 if (Chasing && chase)
                     Debug.Log($"[Chase] mode={Mode} state={State} timeLeft={chase.TimeLeft:F1} dist={chase.Distance:F0} health={chase.TargetHealth:F2} bust={chase.Bust:F2} police={chase.PoliceCount} result={ResultTitle}");
                 foreach (var r in Standings)

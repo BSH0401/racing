@@ -45,14 +45,36 @@ namespace Racing
 
         public static bool IsRoad(float x, float z)
         {
-            return (LineDistance(x) < RoadHalf && InSpan(z, RoadHalf)) || (LineDistance(z) < RoadHalf && InSpan(x, RoadHalf));
+            return (LineDistance(x) < RoadHalf && InSpan(z, RoadHalf)) || (LineDistance(z) < RoadHalf && InSpan(x, RoadHalf))
+                || InExit(x, z, RoadHalf);
         }
 
         public static bool IsSidewalk(float x, float z)
         {
             if (IsRoad(x, z)) return false;
             float w = RoadHalf + Sidewalk;
-            return (LineDistance(x) < w && InSpan(z, w)) || (LineDistance(z) < w && InSpan(x, w));
+            return (LineDistance(x) < w && InSpan(z, w)) || (LineDistance(z) < w && InSpan(x, w)) || InExit(x, z, w);
+        }
+
+        // Streets that carry on past the outer ring road to the edge of the city square, where the
+        // national roads (WorldLayout) start: east, north, south and west.
+        // alongZ: the street runs along z at x = line * Pitch; [from, to] is the stretch outside the grid.
+        public static readonly (bool alongZ, int line, float from, float to)[] ExitStrips =
+        {
+            (false, 4, Pitch * (Lines - 1), Pitch * (Lines - 1) + Margin),
+            (true, 4, Pitch * (Lines - 1), Pitch * (Lines - 1) + Margin),
+            (true, 1, -Margin, 0f),
+            (false, 6, -Margin, 0f),
+        };
+
+        public static bool InExit(float x, float z, float half)
+        {
+            foreach (var e in ExitStrips)
+            {
+                float across = e.alongZ ? x : z, along = e.alongZ ? z : x;
+                if (Mathf.Abs(across - e.line * Pitch) < half && along >= e.from - 0.01f && along <= e.to + 0.01f) return true;
+            }
+            return false;
         }
 
         // Blocks are indexed -1..Lines-1; -1 and Lines-1 are the built-up edge blocks outside the outer streets.
