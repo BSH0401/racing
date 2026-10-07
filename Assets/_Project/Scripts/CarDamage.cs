@@ -82,7 +82,7 @@ namespace Racing
             var emission = smoke.emission;
             emission.rateOverTime = wear > 0.45f ? Mathf.Lerp(8f, 34f, (wear - 0.45f) / 0.55f) : 0f;
             var main = smoke.main;
-            main.startColor = Color.Lerp(new Color(0.8f, 0.8f, 0.8f, 0.55f), new Color(0.12f, 0.12f, 0.12f, 0.8f), (wear - 0.45f) / 0.55f);
+            main.startColor = Color.Lerp(new Color(0.8f, 0.8f, 0.8f, 0.35f), new Color(0.15f, 0.15f, 0.15f, 0.55f), (wear - 0.45f) / 0.55f);
             if (!smoke.isPlaying && wear > 0.45f) smoke.Play();
         }
 
@@ -177,7 +177,7 @@ namespace Racing
             main.loop = true;
             main.startLifetime = new ParticleSystem.MinMaxCurve(1.2f, 2.2f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.8f, 2f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.8f, 1.5f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.6f, 1.1f);
             main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.gravityModifier = -0.05f;
@@ -188,7 +188,7 @@ namespace Racing
             shape.radius = 0.25f;
             var size = smoke.sizeOverLifetime;
             size.enabled = true;
-            size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.7f, 1f, 3.5f));
+            size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.6f, 1f, 2.8f));
             var col = smoke.colorOverLifetime;
             col.enabled = true;
             var g = new Gradient();

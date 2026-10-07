@@ -17,6 +17,9 @@ namespace Racing
             var chase = cam.GetComponent<ChaseCamera>();
             if (chase) chase.enabled = false;
             cam.farClipPlane = 6000f;
+            // Scenery only: no race HUD or menu over the views.
+            foreach (var canvas in FindObjectsByType<Canvas>(FindObjectsSortMode.None)) canvas.enabled = false;
+            if (RaceManager.Instance && RaceManager.Instance.minimapCamera) RaceManager.Instance.minimapCamera.enabled = false;
             yield return new WaitForSeconds(2f);
 
             string only = DevFlags.Get("-viewonly");
