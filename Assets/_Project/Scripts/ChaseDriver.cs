@@ -14,6 +14,10 @@ namespace Racing
         [System.NonSerialized] public bool useNitro;
         public float cornerGrip = 1.3f;
         public float directRange = 45f;
+        [Tooltip("How far from a street junction a corner can start (m): caps the planned corner radius.")]
+        public float junctionCut = 20f;
+        [Tooltip("Route planning: extra metres charged per 90 degree turn, so routes keep to few corners.")]
+        public float turnCost = 60f;
 
         CarController car;
         Nitro nitro;
@@ -65,29 +69,36 @@ namespace Racing
                     replan = 0.6f;
                     Plan(p, qLead);
                 }
-                // Advance past waypoints we have reached (or overshot).
-                while (pathPos < path.Count - 1)
+                // path[pathPos] -> path[pathPos + 1] is the leg we are on (path[0] is where we planned
+                // from). Move on once its end is reached, or passed while cutting the corner.
+                while (pathPos < path.Count - 2)
                 {
                     Vector3 a = path[pathPos], b = path[pathPos + 1];
                     Vector3 ab = Flat(b - a);
-                    if (Flat(p - a).magnitude < 12f || Vector3.Dot(Flat(p - a), ab) > ab.sqrMagnitude * 0.6f) pathPos++;
+                    if (Flat(p - b).magnitude < 12f || Vector3.Dot(Flat(p - a), ab) >= ab.sqrMagnitude) pathPos++;
                     else break;
                 }
                 aim = LookAhead(p, 10f + Mathf.Abs(speed) * 0.5f);
 
-                // Corner speed from the heading change at the coming waypoints.
-                float along = Flat(path[Mathf.Min(pathPos, path.Count - 1)] - p).magnitude;
+                // Corner speed from the heading change at the coming waypoints, starting with the end
+                // of the current leg.
+                float along = Flat(path[Mathf.Min(pathPos + 1, path.Count - 1)] - p).magnitude;
                 for (int k = pathPos; k < path.Count - 2 && along < 20f + speed * speed / (2f * brake); k++)
                 {
                     Vector3 d0 = Flat(path[k + 1] - path[k]), d1 = Flat(path[k + 2] - path[k + 1]);
                     float turn = Vector3.Angle(d0, d1) * Mathf.Deg2Rad;
                     if (turn > 0.15f)
                     {
-                        float radius = Mathf.Clamp(Mathf.Min(d0.magnitude, d1.magnitude) * 0.5f / Mathf.Tan(turn * 0.5f), 8f, 400f);
+                        // Arc tangent to both legs: sampled curves (highway, national roads) bend over
+                        // their whole leg, a street junction only within about a road width of the corner.
+                        // The first leg starts wherever we planned from, so its length says nothing.
+                        float legs = k == 0 ? d1.magnitude : Mathf.Min(d0.magnitude, d1.magnitude);
+                        float cut = Mathf.Min(legs * 0.5f, junctionCut);
+                        float radius = Mathf.Clamp(cut / Mathf.Tan(turn * 0.5f), 8f, 400f);
                         float vCorner = Mathf.Sqrt(cornerGrip * 9.81f * radius);
                         targetSpeed = Mathf.Min(targetSpeed, Mathf.Sqrt(vCorner * vCorner + 2f * brake * Mathf.Max(0f, along - 8f)));
                     }
-                    along += d0.magnitude;
+                    along += d1.magnitude;
                 }
             }
 
@@ -118,14 +129,31 @@ namespace Racing
             if (nitro) nitro.Request = useNitro && dist > 50f && Mathf.Abs(angle) < 6f && speed > 15f && targetSpeed >= top * 0.99f;
         }
 
+        // Path: from here over the road graph to the target. Graph nodes are junctions (and samples
+        // along curved roads), so the first node may be behind us on the road we are already on and
+        // the last one beyond the target; both are dropped rather than driven to and back.
         void Plan(Vector3 from, Vector3 to)
         {
             path.Clear();
             pathPos = 0;
             int a = WorldLayout.NearestNode(from, transform.forward);
             int b = WorldLayout.NearestNode(to, Vector3.zero);
-            path.AddRange(WorldLayout.FindPath(a, b));
+            path.Add(from);
+            path.AddRange(WorldLayout.FindPath(a, b, transform.forward, turnCost));
+            while (path.Count >= 3 && OnLeg(from, path[1], path[2])) path.RemoveAt(1);
+            while (path.Count >= 2 && OnLeg(to, path[path.Count - 2], path[path.Count - 1])) path.RemoveAt(path.Count - 1);
             path.Add(to); // finish at the target itself
+        }
+
+        // Is p on the road from a to b (between them, within a road width of the line)?
+        static bool OnLeg(Vector3 p, Vector3 a, Vector3 b)
+        {
+            Vector3 ab = Flat(b - a), ap = Flat(p - a);
+            float len2 = ab.sqrMagnitude;
+            if (len2 < 1f) return false;
+            float t = Vector3.Dot(ap, ab) / len2;
+            if (t < 0f || t > 1f) return false;
+            return (ap - ab * t).magnitude < 12f && Mathf.Abs(p.y - Mathf.Lerp(a.y, b.y, t)) < 6f;
         }
 
         // Point 'ahead' metres further along the path from the closest point on the current leg.

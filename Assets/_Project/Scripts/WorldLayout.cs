@@ -845,6 +845,7 @@ namespace Racing
             }
 
             int NextOnChain(int node) => Graph[node].next.Count > 0 ? Graph[node].next[0] : node;
+            IndexEdges();
         }
 
         public static int NearestNode(Vector3 p, Vector3 heading)
@@ -862,42 +863,121 @@ namespace Racing
         }
 
         // A* over the road graph; returns node positions from start to goal (empty if unreachable).
-        public static List<Vector3> FindPath(int start, int goal)
+        // The search runs over directed edges so it can charge 'turnCost' metres per 90 degrees of
+        // heading change at a node: on the street grid every monotone route is equally short, and
+        // without it the cheapest-looking one is a staircase with a corner at every block. 'heading'
+        // (optional) is the direction the car arrives at 'start' with, so turning round costs extra.
+        public static List<Vector3> FindPath(int start, int goal, Vector3 heading = default, float turnCost = 0f)
         {
             var path = new List<Vector3>();
             if (start < 0 || goal < 0) return path;
-            int n = Graph.Count;
-            var g = new float[n];
-            var from = new int[n];
-            var closed = new bool[n];
-            for (int i = 0; i < n; i++) { g[i] = float.MaxValue; from[i] = -1; }
-            var open = new List<int> { start };
-            g[start] = 0f;
+            if (start == goal) { path.Add(Graph[start].pos); return path; }
+            if (edgeHead == null || edgeBase.Length != Graph.Count + 1) IndexEdges();
+            int m = edgeHead.Length;
+            var g = new float[m];
+            var from = new int[m];
+            var closed = new bool[m];
+            for (int i = 0; i < m; i++) { g[i] = float.MaxValue; from[i] = -1; }
             Vector3 goalPos = Graph[goal].pos;
+            var open = new MinHeap();
+            heading.y = 0f;
+            for (int e = edgeBase[start]; e < edgeBase[start + 1]; e++)
+            {
+                Vector3 d = Graph[edgeHead[e]].pos - Graph[start].pos;
+                float cost = d.magnitude + (heading.sqrMagnitude > 0.01f ? TurnPenalty(heading, d, turnCost) : 0f);
+                g[e] = cost;
+                open.Push(e, cost + Vector3.Distance(Graph[edgeHead[e]].pos, goalPos));
+            }
+            int found = -1;
             while (open.Count > 0)
             {
-                int bi = 0;
-                float bf = float.MaxValue;
-                for (int k = 0; k < open.Count; k++)
-                {
-                    float f = g[open[k]] + Vector3.Distance(Graph[open[k]].pos, goalPos);
-                    if (f < bf) { bf = f; bi = k; }
-                }
-                int cur = open[bi];
-                open.RemoveAt(bi);
-                if (cur == goal) break;
+                int cur = open.Pop();
                 if (closed[cur]) continue;
                 closed[cur] = true;
-                foreach (int nb in Graph[cur].next)
+                int node = edgeHead[cur];
+                if (node == goal) { found = cur; break; }
+                Vector3 inDir = Graph[node].pos - Graph[edgeTail[cur]].pos;
+                for (int e = edgeBase[node]; e < edgeBase[node + 1]; e++)
                 {
-                    float ng = g[cur] + Vector3.Distance(Graph[cur].pos, Graph[nb].pos);
-                    if (ng < g[nb]) { g[nb] = ng; from[nb] = cur; open.Add(nb); }
+                    if (closed[e]) continue;
+                    Vector3 d = Graph[edgeHead[e]].pos - Graph[node].pos;
+                    float ng = g[cur] + d.magnitude + TurnPenalty(inDir, d, turnCost);
+                    if (ng < g[e])
+                    {
+                        g[e] = ng;
+                        from[e] = cur;
+                        open.Push(e, ng + Vector3.Distance(Graph[edgeHead[e]].pos, goalPos));
+                    }
                 }
             }
-            if (g[goal] == float.MaxValue) return path;
-            for (int c = goal; c >= 0; c = from[c]) path.Add(Graph[c].pos);
+            if (found < 0) return path;
+            for (int e = found; e >= 0; e = from[e]) path.Add(Graph[edgeHead[e]].pos);
+            path.Add(Graph[start].pos);
             path.Reverse();
             return path;
+        }
+
+        // Nothing for gentle bends (curved roads are sampled every ~40 m), 'turnCost' for a right
+        // angle, a little over twice that for turning round.
+        static float TurnPenalty(Vector3 a, Vector3 b, float turnCost)
+        {
+            if (turnCost <= 0f) return 0f;
+            float angle = Vector3.Angle(new Vector3(a.x, 0f, a.z), new Vector3(b.x, 0f, b.z));
+            return turnCost * Mathf.Max(0f, angle - 15f) / 75f;
+        }
+
+        // Directed edges numbered node by node: node u's edges are edgeBase[u] .. edgeBase[u + 1] - 1,
+        // in the order of Graph[u].next.
+        static int[] edgeBase, edgeHead, edgeTail;
+
+        static void IndexEdges()
+        {
+            edgeBase = new int[Graph.Count + 1];
+            for (int u = 0; u < Graph.Count; u++) edgeBase[u + 1] = edgeBase[u] + Graph[u].next.Count;
+            edgeHead = new int[edgeBase[Graph.Count]];
+            edgeTail = new int[edgeHead.Length];
+            for (int u = 0; u < Graph.Count; u++)
+                for (int k = 0; k < Graph[u].next.Count; k++)
+                {
+                    edgeHead[edgeBase[u] + k] = Graph[u].next[k];
+                    edgeTail[edgeBase[u] + k] = u;
+                }
+        }
+
+        // Binary min-heap of (item, priority) for the path search.
+        class MinHeap
+        {
+            readonly List<(int item, float key)> h = new List<(int, float)>();
+            public int Count => h.Count;
+
+            public void Push(int item, float key)
+            {
+                h.Add((item, key));
+                for (int i = h.Count - 1; i > 0;)
+                {
+                    int parent = (i - 1) / 2;
+                    if (h[parent].key <= h[i].key) break;
+                    (h[parent], h[i]) = (h[i], h[parent]);
+                    i = parent;
+                }
+            }
+
+            public int Pop()
+            {
+                int top = h[0].item;
+                h[0] = h[h.Count - 1];
+                h.RemoveAt(h.Count - 1);
+                for (int i = 0; ;)
+                {
+                    int l = i * 2 + 1, r = l + 1, s = i;
+                    if (l < h.Count && h[l].key < h[s].key) s = l;
+                    if (r < h.Count && h[r].key < h[s].key) s = r;
+                    if (s == i) break;
+                    (h[s], h[i]) = (h[i], h[s]);
+                    i = s;
+                }
+                return top;
+            }
         }
     }
 }

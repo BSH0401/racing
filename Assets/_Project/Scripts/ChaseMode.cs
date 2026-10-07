@@ -33,7 +33,7 @@ namespace Racing
         readonly List<Racer> reserve = new List<Racer>();
         // Body swaps made to put the cops in police cars, undone by Restore().
         readonly List<(Racer a, Racer b)> swaps = new List<(Racer, Racer)>();
-        float elapsed, lostTimer, hitCooldown, release;
+        float elapsed, lostTimer, hitCooldown, release, breakaway;
 
         const float LoseDistance = 300f;
         const float EscapeDistance = 350f;
@@ -48,7 +48,7 @@ namespace Racing
             Restore();
             Mode = mode;
             Active = true;
-            elapsed = lostTimer = hitCooldown = 0f;
+            elapsed = lostTimer = hitCooldown = breakaway = 0f;
             Bust = 0f;
             TargetHealth = 1f;
             var others = new List<Racer>();
@@ -190,8 +190,12 @@ namespace Racing
         {
             Distance = Flat(Target.transform.position - Player.transform.position).magnitude;
             // The suspect eases off when far ahead and floors it when the player is close.
-            // A burst of nitro only to break away when the player closes in.
-            Target.ai.nitroAllowed = Distance < 45f;
+            // A burst of nitro only to break away when the player closes in: one short window per
+            // approach, then none for a while, or every ramming run ends with the suspect boosting off.
+            breakaway -= dt;
+            bool close = Distance < 45f;
+            if (close && breakaway <= 0f) breakaway = 15f;
+            Target.ai.nitroAllowed = close && breakaway > 13f;
             Target.ai.speedScale = Player.car.maxSpeed / Mathf.Max(1f, Target.car.maxSpeed) * Mathf.Lerp(1.02f, 0.84f, Mathf.InverseLerp(40f, 260f, Distance));
             lostTimer = Distance > LoseDistance ? lostTimer + dt : 0f;
             if (lostTimer > 6f) End(false, "SUSPECT ESCAPED", "The suspect got away.");

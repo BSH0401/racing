@@ -194,6 +194,12 @@ namespace Racing
         public void RespawnFree(Racer r)
         {
             if (r != Player) { SpawnBehindPlayer(r); return; }
+            RespawnOnRoad(r);
+        }
+
+        // Back onto the nearest road graph node, facing along the road closest to the old heading.
+        public void RespawnOnRoad(Racer r)
+        {
             Vector3 p = r.transform.position;
             var graph = WorldLayout.Graph;
             int n = WorldLayout.NearestNode(p, Vector3.zero);

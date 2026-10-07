@@ -490,6 +490,16 @@ namespace Racing
                 if (r.isPlayer && chaseCamera) chaseCamera.Snap();
                 return;
             }
+            // The pursuit autopilot leaves the race route: put it back on the road it was on, not at
+            // the last checkpoint it happened to pass, which can be blocks behind the suspect.
+            if (Chasing && Mode == GameMode.Pursuit && chase.Active && r.chaser && r.chaser.enabled)
+            {
+                chase.RespawnOnRoad(r);
+                r.stuckTimer = r.flipTimer = r.offTrackTimer = r.wrongWayTimer = r.reverseTimer = 0f;
+                r.respawns++;
+                if (r.isPlayer && chaseCamera) chaseCamera.Snap();
+                return;
+            }
             int idx = r.index;
             if (Flat(r.transform.position - track.Point(idx)).sqrMagnitude > 30f * 30f)
                 idx = r.cpPassed > 0 ? checkpoints[r.lastCp] : track.FindClosest(r.transform.position);
