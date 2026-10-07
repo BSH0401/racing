@@ -88,20 +88,34 @@ namespace Racing.EditorTools
                 if (Vector2.Distance(c, next) > r * 4f + 10f) Add(V3(c + dout * r * 2f), city);
             }
 
-            var east = WorldLayout.National[0];
-            var north = WorldLayout.National[1];
+            // East national road out over the flyover, down the outer on-ramp, anticlockwise along the
+            // ring's outer carriageway, up the off-ramp at the north interchange and back to town.
+            var east = WorldLayout.Interchanges[0];
+            var north = WorldLayout.Interchanges[1];
             var ring = WorldLayout.Highway;
-            int jE = WorldLayout.Junctions[0], jN = WorldLayout.Junctions[1];
+            float ramp = WorldLayout.RampHalf - 0.5f;
+            int reach = Mathf.RoundToInt(WorldLayout.RampReach / ring.dist[1]);
 
             Corner(G(4, 1), G(1, 1), G(1, 4));
             Corner(G(1, 1), G(1, 4), G(8, 4));
             Add(V3(G(8, 4)), city);
-            for (int i = 0; i < east.Count - 1; i += 5) Add(east.pts[i], nat);
-            Add(east.pts[east.Count - 1], nat);
-            for (int k = jE + 15; k <= jN - 15; k += 5)
+            // Through the outer terminal pads on a quarter ellipse (12 m along the ring, 8 m across)
+            // that meets the national road 4 m inside the pad, straight and centred; narrow route
+            // width so the drivers hold the middle there.
+            float D = WorldLayout.TerminalOffset, R = 12f, Q = 8f, pad = 2.5f;
+            for (int i = 0; i < east.natOuter - 4; i += 5) Add(east.national.pts[i], nat);
+            float yE = east.padOuter.pts[0].y;
+            for (int a = 0; a <= 90; a += 30)
+                Add(WorldLayout.RingPoint(east.j, R - R * Mathf.Cos(a * Mathf.Deg2Rad), D - Q + Q * Mathf.Sin(a * Mathf.Deg2Rad), yE), pad);
+            for (int i = 4; i < east.onOuter.Count; i += 5) Add(east.onOuter.pts[i], ramp);
+            for (int k = east.j + reach + 12; k <= north.j - reach - 12; k += 5)
                 Add(ring.pts[k] + ring.right[k] * WorldLayout.CarriageCentre, hwy);
-            for (int i = north.Count - 1; i > 0; i -= 5) Add(north.pts[i], nat);
-            Add(north.pts[0], nat);
+            for (int i = 0; i < north.offOuter.Count - 4; i += 5) Add(north.offOuter.pts[i], ramp);
+            float yN = north.padOuter.pts[0].y;
+            for (int a = 0; a <= 90; a += 30)
+                Add(WorldLayout.RingPoint(north.j, -R + R * Mathf.Sin(a * Mathf.Deg2Rad), D - Q + Q * Mathf.Cos(a * Mathf.Deg2Rad), yN), pad);
+            for (int i = north.natOuter - 4; i > 0; i -= 5) Add(north.national.pts[i], nat);
+            Add(north.national.pts[0], nat);
             Add(V3(G(4, 8)), city);
             Corner(G(4, 8), G(4, 1), G(1, 1));
             return (pts.ToArray(), widths.ToArray());
@@ -139,8 +153,13 @@ namespace Racing.EditorTools
             var yellow = Mat("YellowLine", new Color(0.95f, 0.75f, 0.1f), 0.3f);
             var ground = Mat("Ground", new Color(0.3f, 0.42f, 0.24f), 0.05f, 0f, grassTex);
             var grass = Mat("Grass", new Color(0.36f, 0.56f, 0.26f), 0.1f, 0f, grassTex);
-            // Countryside: muted olive meadow so the big open areas don't glow.
-            var countryGrass = Mat("CountryGrass", new Color(0.32f, 0.4f, 0.21f), 0.04f, 0f, grassTex);
+            // Countryside: photographed meadow and forest soil (ambientCG), trees from bark and leaf cards.
+            var countryGrass = TerrainMat("CountryGrass");
+            var bark = PbrMat("Bark", "Bark014", new Color(0.8f, 0.78f, 0.75f), 0.1f, 0f);
+            bark.enableInstancing = true;
+            var foliageBroadleaf = FoliageMat("FoliageBroadleaf", "FoliageBroadleaf.png", new Color(0.82f, 0.86f, 0.78f));
+            var foliagePine = FoliageMat("FoliagePine", "FoliagePine.png", new Color(0.85f, 0.9f, 0.85f));
+            var water = Mat("Water", new Color(0.05f, 0.11f, 0.12f), 0.95f, 0f);
             var sidewalk = PbrMat("Sidewalk", "PavingStones150", new Color(0.9f, 0.9f, 0.9f), 0.25f, 0f);
             sidewalk.SetTextureScale("_BaseMap", new Vector2(1f, 2f));
             var curbStone = Mat("CurbStone", new Color(0.62f, 0.61f, 0.58f), 0.15f, 0f, concreteTex);
@@ -246,6 +265,10 @@ namespace Racing.EditorTools
             builder.sidewalk = sidewalk;
             builder.grass = grass;
             builder.countryGrass = countryGrass;
+            builder.bark = bark;
+            builder.foliageBroadleaf = foliageBroadleaf;
+            builder.foliagePine = foliagePine;
+            builder.water = water;
             builder.barrier = barrier;
             builder.farGround = ground;
             builder.checkerBlack = black;
@@ -389,6 +412,18 @@ namespace Racing.EditorTools
             chaseMode.sirenRed = UnlitMat("SirenRed", new Color(1f, 0.08f, 0.08f));
             chaseMode.sirenBlue = UnlitMat("SirenBlue", new Color(0.1f, 0.3f, 1f));
             rm.chase = chaseMode;
+
+            // Everyday traffic on the highway and national roads.
+            var trafficRoot = new GameObject("TrafficTemplates");
+            trafficRoot.SetActive(false);
+            var headMat = UnlitMat("TrafficHeadlight", new Color(1f, 0.95f, 0.8f));
+            var tailMat = UnlitMat("TrafficTaillight", new Color(0.9f, 0.05f, 0.03f));
+            var templates = new System.Collections.Generic.List<TrafficCar>();
+            foreach (var id in TrafficModels) templates.Add(CreateTrafficCar(id, trafficRoot.transform, headMat, tailMat));
+            var traffic = rmGo.AddComponent<TrafficSystem>();
+            traffic.race = rm;
+            traffic.theme = theme;
+            traffic.templates = templates.ToArray();
             rmGo.AddComponent<MainMenu>().race = rm;
 
             // Split car meshes are overwritten in place (stable GUIDs); drop ones no longer produced.
@@ -537,6 +572,74 @@ namespace Racing.EditorTools
             audio.squealClip = Clip("tire_squeal.wav");
             audio.crashClip = Clip("crash.wav");
             return racer;
+        }
+
+        // Civilian models used for traffic (the lighter-weight meshes of the garage).
+        static readonly string[] TrafficModels = { "Pack_SUV", "Pack_Sport", "Mercedes_G", "CrownVic_Taxi", "Mazda_RX7_FC" };
+
+        // Traffic car: the garage model with spinning wheels, a box collider, a kinematic body and
+        // small head/tail lamps that show at night. No CarController - TrafficCar drives it on rails.
+        static TrafficCar CreateTrafficCar(string modelId, Transform parent, Material headMat, Material tailMat)
+        {
+            var go = new GameObject(modelId);
+            go.transform.SetParent(parent, false);
+            var rb = go.AddComponent<Rigidbody>();
+            rb.mass = 1300f;
+            rb.isKinematic = true;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+
+            string dir = SketchfabCars + modelId + "/";
+            var meta = LoadMeta(dir + modelId + ".json");
+            var model = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(dir + modelId + ".gltf"));
+            model.name = "Model";
+            model.transform.SetParent(go.transform, false);
+            var centres = new Vector3[4];
+            var pivots = new Transform[4];
+            for (int i = 0; i < 4; i++)
+            {
+                centres[i] = new Vector3(meta.wheels[i][0], meta.wheels[i][1], meta.wheels[i][2]);
+                pivots[i] = new GameObject("Wheel" + i).transform;
+                pivots[i].SetParent(go.transform, false);
+                pivots[i].localPosition = centres[i];
+            }
+            SplitWheels(model.transform, modelId, centres, meta.radius, pivots);
+
+            var lo = new Vector3(meta.bodyMin[0], meta.bodyMin[1], meta.bodyMin[2]);
+            var hi = new Vector3(meta.bodyMax[0], meta.bodyMax[1], meta.bodyMax[2]);
+            var box = go.AddComponent<BoxCollider>();
+            box.center = (lo + hi) * 0.5f + Vector3.up * 0.1f;
+            Vector3 size = hi - lo;
+            box.size = new Vector3(size.x * 0.95f, (size.y - 0.2f) * 0.9f, size.z * 0.97f);
+
+            var lights = new GameObject("Lights");
+            lights.transform.SetParent(go.transform, false);
+            float lampY = lo.y + size.y * 0.42f, lampX = size.x * 0.34f;
+            foreach (float sx in new[] { -1f, 1f })
+            {
+                Lamp(lights, new Vector3(sx * lampX, lampY, hi.z - 0.02f), new Vector3(0.28f, 0.12f, 0.06f), headMat);
+                Lamp(lights, new Vector3(sx * lampX, lampY + 0.08f, lo.z + 0.02f), new Vector3(0.26f, 0.1f, 0.06f), tailMat);
+            }
+            lights.SetActive(false);
+
+            foreach (var t in go.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = 2;
+            var tc = go.AddComponent<TrafficCar>();
+            tc.wheels = pivots;
+            tc.wheelRadius = meta.radius;
+            tc.lights = lights;
+            return tc;
+
+            static void Lamp(GameObject parent, Vector3 pos, Vector3 scale, Material mat)
+            {
+                var lamp = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Object.DestroyImmediate(lamp.GetComponent<Collider>());
+                lamp.transform.SetParent(parent.transform, false);
+                lamp.transform.localPosition = pos;
+                lamp.transform.localScale = scale;
+                var r = lamp.GetComponent<MeshRenderer>();
+                r.sharedMaterial = mat;
+                r.shadowCastingMode = ShadowCastingMode.Off;
+            }
         }
 
         // Moves every triangle that lies wholly inside a wheel's cylinder (axis = car X) from the model's
@@ -865,6 +968,54 @@ namespace Racing.EditorTools
                 m.SetColor("_EmissionColor", emission.Value);
                 m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
             }
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        // Racing/TerrainBlend: ambientCG grass and forest soil, blended by vertex colour.
+        static Material TerrainMat(string name)
+        {
+            var m = GetOrCreate(name, "Racing/TerrainBlend");
+            m.shader = Shader.Find("Racing/TerrainBlend");
+            m.SetTexture("_GrassMap", AssetDatabase.LoadAssetAtPath<Texture2D>(AmbientCG + "Grass004/Grass004_Color.jpg"));
+            m.SetTexture("_GrassNormal", NormalMap(AmbientCG + "Grass004/Grass004_NormalGL.jpg"));
+            m.SetTexture("_DirtMap", AssetDatabase.LoadAssetAtPath<Texture2D>(AmbientCG + "Ground037/Ground037_Color.jpg"));
+            m.SetTexture("_DirtNormal", NormalMap(AmbientCG + "Ground037/Ground037_NormalGL.jpg"));
+            m.SetColor("_GrassTint", new Color(0.6f, 0.66f, 0.5f));
+            m.SetColor("_DirtTint", new Color(0.66f, 0.62f, 0.56f));
+            m.SetFloat("_Tiling", 3.5f);
+            m.SetFloat("_NormalStrength", 0.8f);
+            m.SetFloat("_Smoothness", 0.06f);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        // Alpha-cut, double-sided leaf cards (Tools/foliage_cards.py output).
+        static Material FoliageMat(string name, string file, Color tint)
+        {
+            string path = AmbientCG + "Generated/" + file;
+            var imp = (TextureImporter)AssetImporter.GetAtPath(path);
+            if (!imp.alphaIsTransparency || !imp.mipMapsPreserveCoverage || imp.wrapMode != TextureWrapMode.Clamp)
+            {
+                imp.alphaIsTransparency = true;
+                imp.mipMapsPreserveCoverage = true;
+                imp.alphaTestReferenceValue = 0.5f;
+                imp.wrapMode = TextureWrapMode.Clamp;
+                imp.SaveAndReimport();
+            }
+            var m = Mat(name, tint, 0.15f, 0f, AssetDatabase.LoadAssetAtPath<Texture2D>(path));
+            m.SetFloat("_AlphaClip", 1f);
+            m.SetFloat("_Cutoff", 0.5f);
+            m.EnableKeyword("_ALPHATEST_ON");
+            m.SetFloat("_Cull", 0f);
+            // Leaf cards are matte: no sun glints or sky reflections off grazing cards.
+            m.SetFloat("_SpecularHighlights", 0f);
+            m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            m.SetFloat("_EnvironmentReflections", 0f);
+            m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+            m.SetOverrideTag("RenderType", "TransparentCutout");
+            m.renderQueue = (int)RenderQueue.AlphaTest;
+            m.enableInstancing = true;
             EditorUtility.SetDirty(m);
             return m;
         }

@@ -3,9 +3,13 @@
 Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 
 ## 게임 내용
-- 약 3.8km × 3.8km 오픈 월드: 가운데 언덕 도심(9×9 도로 격자, 블록 96m, 4차선 도로·횡단보도·연석·보도·빌딩·공원·가로등)과 주변 시골 지형(구릉, 숲)
+- 약 3.8km × 3.8km 오픈 월드: 가운데 언덕 도심(9×9 도로 격자, 블록 96m, 4차선 도로·횡단보도·연석·보도·빌딩·공원·가로등)과 주변 시골 지형(구릉, 숲, 강과 호수)
 - 고속도로: 도심을 둘러싼 약 7.5km 순환 고속도로, 편도 3차로 + 중앙분리대·가드레일·가로등, 경사 제한된 노면 높이(절토·성토 자동 생성)
-- 국도: 도심 동·서·남·북 출구에서 고속도로까지 이어지는 굽은 2차로 도로 4개 (합류 지점은 중앙분리대 개방)
+- 국도: 도심 동·서·남·북 출구에서 고속도로까지 이어지는 굽은 2차로 도로 4개
+- 인터체인지 4곳(다이아몬드형 입체교차): 국도가 고가도로로 고속도로를 넘어가고, 차로마다 진입·진출 램프 + 원형 램프 접속부
+- 고가도로·교량: 지면에서 4m 이상 떠 있는 구간은 자동으로 교량 상판(교각·콘크리트 난간)이 되어, 강 위 고속도로 고가교와 국도 고가도로가 생긴다
+- 교통: 고속도로 6개 차로와 국도 양방향에 일반 차량. 플레이어 주변 300~700m에 보이지 않게 생성·회수되고, 앞차와의 간격을 맞추며(IDM 차간 모델) 막히면 추월 차로로 옮김. 세게 들이받으면 사고 차량이 되어 물리적으로 굴러간다. AI 레이서는 교통을 피해서 달림. 밤에는 전조등·후미등
+- 실사 시골 풍경: 사진 풀밭·숲 흙 텍스처 블렌딩(경사면·물가·갓길·숲 바닥은 흙, 마른 풀 얼룩, 타일 반복 감춤 전용 셰이더), 실사 나무껍질·나뭇잎 카드로 만든 활엽수·침엽수 약 2만 5천 그루 (GPU 인스턴싱, 거리별 단순화)
 - GTA 스트리트 레이스 방식: 도시를 도는 약 2.6km 경로에 체크포인트 24개, 순서대로 통과(지름길 가능), 다음 체크포인트 광선 표시
 - 플레이어를 따라 회전하는 레이더식 미니맵(경로선·체크포인트 표시)
 - 메인 화면: 배경에서 차들이 자동 주행하고 시네마틱 카메라가 중계 (START / MODE / GARAGE / SETTINGS / CONTROLS / QUIT, 마우스 지원)
@@ -33,7 +37,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
   | Porsche 911 Turbo | 12,000 CR | 최고속도 최강, 뒤가 잘 미끄러짐 |
   | Nissan Skyline R34 | 14,000 CR | 4륜구동 그립 최강 |
 - 상금: 1~6위 2,000/1,400/1,000/700/500/300 CR (2랩 기준, 랩 수에 비례). 레이스에 나오는 6대 외의 차는 예비 차체로 보관되다가 선택하면 교체된다. 도주 모드 경찰은 실제 경찰차(Charger·크라운 빅토리아)를 우선 사용
-- 설정: 코스(CITY 2.6km / GRAND 5.4km: 도심→동쪽 국도→고속도로→북쪽 국도→도심), 랩 수(1~10), 시간대(낮/밤), AI 난이도, 볼륨 — 저장됨
+- 설정: 코스(CITY 2.6km / GRAND 5.4km: 도심→동쪽 국도→고가도로→진입 램프→고속도로(강 위 고가교)→진출 램프→북쪽 국도→도심), 랩 수(1~10), 시간대(낮/밤), AI 난이도, 볼륨 — 저장됨
 - 도주 모드 경찰은 도심·국도·고속도로 전체 도로망에서 길찾기(A*)로 추격
 - 기록: 베스트 랩, 최고 순위 저장 및 메인 화면 표시
 - 플레이어 1명 + AI 5명
@@ -65,10 +69,10 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 3. 메뉴 **Racing → Setup Scene**: 씬·머티리얼을 코드(`Assets/_Project/Editor/RacingSetup.cs`)로 다시 생성.
 4. 메뉴 **Racing → Build Windows**: `Builds/Windows/Racing.exe` 생성.
 
-도시 지형·도로 격자는 `CityLayout`, 시골 지형·고속도로·국도·경찰 길찾기 그래프는 `WorldLayout`, 레이스 경로는 `RacingSetup.RouteIntersections`/`GrandRoute()`로 정해지며, 모든 메쉬는 `TrackBuilder`(+`TrackBuilder.World.cs`)가 실행 시 생성한다.
+도시 지형·도로 격자는 `CityLayout`, 시골 지형·고속도로·국도·경찰 길찾기 그래프는 `WorldLayout`, 레이스 경로는 `RacingSetup.RouteIntersections`/`GrandRoute()`로 정해지며, 모든 메쉬는 `TrackBuilder`(+`TrackBuilder.World.cs`)가 실행 시 생성한다. 나무 모양은 `TreeMeshes`, 숲 그리기는 `ForestRenderer`, 교통은 `TrafficSystem`/`TrafficCar`, 시골 지면 셰이더는 `Shaders/TerrainBlend.shader`. 나뭇잎 카드 텍스처는 `Tools/foliage_cards.py`로 만든다.
 
 ## 개발용 실행 옵션
-`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-showcase <폴더>` (차량별 측면·전면·후면 스크린샷 후 종료, `-showall`이면 차고 15종 전부), `-mode race|pursuit|escape`, `-logchase`, `-car <id>` (플레이어 차 강제), `-garage N` (차고 화면 N번 차로 열기), `-credits N`, `-lookyaw N` (자유 시점 각도 고정), `-logrespawns`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
+`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-showcase <폴더>` (차량별 측면·전면·후면 스크린샷 후 종료, `-showall`이면 차고 15종 전부), `-mode race|pursuit|escape`, `-logchase`, `-car <id>` (플레이어 차 강제), `-garage N` (차고 화면 N번 차로 열기), `-credits N`, `-lookyaw N` (자유 시점 각도 고정), `-logrespawns` (리스폰 위치·주변 충돌체 출력), `-validateworld` (지형이 도로·교량 상판을 뚫는지 검사), `-views <폴더>` (인터체인지·고가교·숲 등 고정 시점 스크린샷 후 종료, `-viewonly <이름 일부>`, `-viewat x,y,z`), `-notraffic`, `-noforest`, `-forestnear N -forestfar N`, `-route city|grand`, `-logpos N`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
 
 ## 크레딧
 - 차량 모델 (CC BY 4.0, 크기·방향·바퀴 분리 등 게임용으로 변환, 텍스처 축소):
@@ -81,7 +85,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
   - "[1965 Ford Mustang](https://sketchfab.com/3d-models/1965-ford-mustang-7e93cc22b96a4788897a513374ef4486)", "[Dodge Charger Police NYPD](https://sketchfab.com/3d-models/dodge-charger-police-nypd-578e2bfb9c8f415d932527a938e2fc64)" by [David_Holiday](https://sketchfab.com/David_Holiday)
   - "[Toyota Supra 2.5 GT Twin Turbo (A70)](https://sketchfab.com/3d-models/toyota-supra-25-gt-twin-turbo-a70-6d002956a62a4e1085c6aab41b088ab1)" by [GT Cars: Hyperspeed](https://sketchfab.com/Car2022)
   - 라이선스: [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/), 원본 정보는 `Assets/_Project/ThirdParty/Sketchfab/*/license.txt`
-- PBR 텍스처(도로·보도·건물 외벽): [ambientCG](https://ambientcg.com) (CC0)
+- PBR 텍스처(도로·보도·건물 외벽·풀밭·흙·나무껍질·나뭇잎): [ambientCG](https://ambientcg.com) (CC0)
 - HDRI 하늘·거리 소품: [Poly Haven](https://polyhaven.com) (CC0)
 - 효과음 (CC0, [freesound.org](https://freesound.org)): AndrewAlexander, Dmitry_mansurev64, erik90, audible-edge, qubodup — 자세한 출처는 `Assets/_Project/ThirdParty/Freesound/License.txt`, 가공 스크립트 `Tools/sound_prep.py`
 - 라이선스 파일: `Assets/_Project/ThirdParty/*/License.txt` (Sketchfab은 `license.txt`)

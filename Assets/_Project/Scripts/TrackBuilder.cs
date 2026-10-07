@@ -215,8 +215,6 @@ namespace Racing
             int fc = Mathf.Max(1, facadeMaterials.Length);
             int roofSub = fc;
             var mb = new MeshBuilder(fc + 1);
-            var cyl = PrimitiveMesh(PrimitiveType.Cylinder);
-            var sph = PrimitiveMesh(PrimitiveType.Sphere);
             var trunks = new List<CombineInstance>();
             var crowns = new List<CombineInstance>();
             Vector2 centre = new Vector2(CityLayout.Size * 0.5f, CityLayout.Size * 0.5f);
@@ -232,7 +230,7 @@ namespace Racing
                 if (CityLayout.IsPark(bi, bj))
                 {
                     for (int t = 0; t < 14; t++)
-                        AddTree(trunks, crowns, cyl, sph, new Vector3(Mathf.Lerp(x0 + 4f, x1 - 4f, R()), 0f, Mathf.Lerp(z0 + 4f, z1 - 4f, R())), 0.8f + R() * 0.7f, R());
+                        AddTree(trunks, crowns, new Vector3(Mathf.Lerp(x0 + 4f, x1 - 4f, R()), 0f, Mathf.Lerp(z0 + 4f, z1 - 4f, R())), 0.8f + R() * 0.7f, R());
                     continue;
                 }
 
@@ -281,8 +279,8 @@ namespace Racing
             for (int i = 0; i < fc; i++) mats[i] = facadeMaterials.Length > 0 ? facadeMaterials[i] : roof;
             mats[roofSub] = roof;
             MeshObject("Buildings", root, mb.Build(), true, mats).layer = cityLayer;
-            MeshObject("Trunks", root, Combine(trunks), false, trunk).layer = cityLayer;
-            MeshObject("Crowns", root, Combine(crowns), false, leaves).layer = cityLayer;
+            MeshObject("Trunks", root, Combine(trunks), false, bark ? bark : trunk).layer = cityLayer;
+            MeshObject("Crowns", root, Combine(crowns), false, foliageBroadleaf ? foliageBroadleaf : leaves).layer = cityLayer;
         }
 
         // True when a lot of the given size would sit on an exit street or its sidewalks.
@@ -367,11 +365,14 @@ namespace Racing
             }
         }
 
-        static void AddTree(List<CombineInstance> trunks, List<CombineInstance> crowns, Mesh cyl, Mesh sph, Vector3 pos, float s, float spin)
+        // Park tree: one of the countryside broadleaf variants.
+        void AddTree(List<CombineInstance> trunks, List<CombineInstance> crowns, Vector3 pos, float s, float spin)
         {
             pos.y = H(pos.x, pos.z) + CityLayout.CurbHeight;
-            trunks.Add(Inst(cyl, pos + Vector3.up * 1.5f * s, Quaternion.identity, new Vector3(0.45f, 1.5f, 0.45f) * s));
-            crowns.Add(Inst(sph, pos + Vector3.up * 4.4f * s, Quaternion.Euler(0f, spin * 360f, 0f), new Vector3(3.6f, 4.2f, 3.6f) * s));
+            var tree = TreeKinds[Mathf.FloorToInt(spin * 977f) % BroadleafKinds];
+            var rot = Quaternion.Euler(0f, spin * 360f, 0f);
+            trunks.Add(Inst(tree.wood, pos, rot, Vector3.one * s));
+            crowns.Add(Inst(tree.foliage, pos, rot, Vector3.one * s));
         }
 
         // ---- Lamps and start ----

@@ -3,10 +3,13 @@ using UnityEngine;
 
 namespace Racing
 {
-    // The open world around the city: rolling countryside, a highway ring (3 lanes each way with a
-    // barrier in the middle) and four winding two-lane national roads joining the city exits to it.
-    // Roads carry their own smoothed, grade-limited height profile; the terrain is pulled onto them,
-    // which gives natural cuttings and embankments. Inside the city square CityLayout rules unchanged.
+    // The open world around the city: rolling countryside with a river running into a lake, a
+    // highway ring (3 lanes each way with a barrier in the middle) and four winding two-lane national
+    // roads that fly over the ring at diamond interchanges, with an on and off ramp for each
+    // carriageway. Roads carry their own smoothed, grade-limited height profile; where a road runs
+    // well above the ground (river valley, flyovers, ramps) it becomes a bridge deck on piers,
+    // elsewhere the terrain is pulled onto it, which gives natural cuttings and embankments.
+    // Inside the city square CityLayout rules unchanged.
     public static class WorldLayout
     {
         public const float Min = -1500f, Max = 2268f; // aligned with the city edges on an 8 m grid
@@ -17,18 +20,27 @@ namespace Racing
         public static float CarriageCentre => MedianHalf + LaneWidth * HighwayLanes * 0.5f;     // 7.9
         public static float HighwayHalf => MedianHalf + LaneWidth * HighwayLanes + ShoulderWidth; // 15.8
         public const float NationalHalf = 5f; // two 3.5 m lanes plus 1.5 m shoulders
+        public const float RampHalf = 4.5f;   // one 4.5 m lane plus shoulders
         public const float Verge = 12f;
+
+        // Interchanges: the national road crosses the ring at 'BridgeRise' above it; ramp terminals sit
+        // 'TerminalOffset' from the ring's centre line, ramps leave the ring up to 'RampReach' away.
+        public const float BridgeRise = 7.5f, TerminalOffset = 50f, RampReach = 330f;
+        // A road this far above the ground under it is built as a bridge deck.
+        public const float BridgeClearance = 4f, DeckDepth = 1.3f;
 
         public class Road
         {
             public string name;
-            public bool highway, closed;
+            public bool highway, closed, ramp, pad;
             public int index;
             public float halfWidth;
             public Vector3[] pts;   // centre line with profile height, ~4 m apart
             public Vector3[] right; // flat right-hand normals
             public float[] dist;
+            public bool[] elevated; // bridge deck at this sample
             public float Length => dist[dist.Length - 1];
+            public float Lift => highway ? 0.015f : ramp ? 0.03f : pad ? 0.045f : 0f;
 
             public int Count => pts.Length;
             public int Wrap(int i) => closed ? ((i % Count) + Count) % Count : Mathf.Clamp(i, 0, Count - 1);
@@ -40,7 +52,7 @@ namespace Racing
             public Vector2 cityEnd;   // last intersection inside the street grid
             public Vector2 edge;      // where the street leaves the city square
             public Vector2 dir;       // outward
-            public float ringAngle;   // where its national road meets the highway (degrees)
+            public float ringAngle;   // where its national road crosses the highway (degrees)
         }
 
         public static readonly Exit[] Exits =
@@ -51,10 +63,25 @@ namespace Racing
             new Exit { cityEnd = new Vector2(0f, 576f), edge = new Vector2(CityLayout.Min, 576f), dir = Vector2.left, ringAngle = 172f },
         };
 
+        // Diamond interchange where a national road flies over the ring. "Outer" ramps serve the
+        // anticlockwise (outside) carriageway, "inner" ramps the clockwise one.
+        public class Interchange
+        {
+            public int j;                // highway sample under the flyover
+            public Road national;
+            public int natInner, natOuter; // national road samples at the two ramp terminals
+            public Road offOuter, onOuter, offInner, onInner;
+            public Road padInner, padOuter;
+        }
+
         public static Road Highway { get; private set; }
         public static readonly List<Road> National = new List<Road>();
+        public static readonly List<Road> Ramps = new List<Road>();
+        public static readonly List<Road> Pads = new List<Road>();
+        public const float PadRadius = 12f;
         public static readonly List<Road> Roads = new List<Road>();
-        // Highway sample index where each national road joins (same order as Exits).
+        public static readonly List<Interchange> Interchanges = new List<Interchange>();
+        // Highway sample index of each interchange (same order as Exits).
         public static readonly List<int> Junctions = new List<int>();
 
         static readonly Dictionary<long, List<(Road road, int i)>> hash = new Dictionary<long, List<(Road, int)>>();
@@ -68,32 +95,155 @@ namespace Racing
         static bool InCity(float x, float z) =>
             x >= CityLayout.Min && x <= CityLayout.Max && z >= CityLayout.Min && z <= CityLayout.Max;
 
+        // ---- River and lake ----
+
+        // A river comes in over the north-east world edge, passes under the ring's corner and fills a
+        // lake between the ring and the city.
+        public static readonly Vector2 LakeCentre = new Vector2(1060f, 1060f);
+        public const float LakeRadius = 130f, RiverHalf = 18f;
+        public static Vector2[] RiverPts { get; private set; }
+        public static float[] RiverLevel { get; private set; }
+        public static float LakeLevel { get; private set; }
+
+        const float WaterCell = 8f;
+        static int waterN;
+        static float[] waterDist, waterLevel; // distance past the water's edge, surface level
+
+        static void BuildWater()
+        {
+            var ctrl = new List<Vector2>
+            {
+                new Vector2(2420f, 1990f), new Vector2(2380f, 1960f), new Vector2(2080f, 1790f), new Vector2(1780f, 1610f),
+                new Vector2(1500f, 1420f), new Vector2(1260f, 1230f), LakeCentre,
+            };
+            var pts = Resample(CatmullRom(ctrl), false, 4f);
+            RiverPts = pts.ToArray();
+            // Surface a few metres below the ground along the bed, never running uphill, and at least
+            // 'BridgeClearance' + deck below any road that crosses it.
+            RiverLevel = new float[pts.Count];
+            for (int i = 0; i < pts.Count; i++)
+            {
+                float level = Natural0(pts[i].x, pts[i].y) - 6f;
+                int n = Query(pts[i].x, pts[i].y, RiverHalf + 25f, out var near);
+                for (int k = 0; k < n; k++) level = Mathf.Min(level, near[k].y - DeckDepth - BridgeClearance - 1f);
+                RiverLevel[i] = i > 0 ? Mathf.Min(level, RiverLevel[i - 1]) : level;
+            }
+            LakeLevel = Mathf.Min(RiverLevel[pts.Count - 1], Natural0(LakeCentre.x, LakeCentre.y) - 7f);
+            RiverLevel[pts.Count - 1] = LakeLevel;
+            // Ease the steps out of the profile, never above the limits found above, never uphill.
+            var cap = (float[])RiverLevel.Clone();
+            for (int pass = 0; pass < 3; pass++)
+                for (int i = 1; i < pts.Count - 1; i++)
+                    RiverLevel[i] = Mathf.Min((RiverLevel[i - 1] + RiverLevel[i] + RiverLevel[i + 1]) / 3f, RiverLevel[i - 1], cap[i]);
+
+            waterN = Mathf.CeilToInt((Max - Min) / WaterCell) + 1;
+            waterDist = new float[waterN * waterN];
+            waterLevel = new float[waterN * waterN];
+            const float reach = 220f;
+            for (int gj = 0; gj < waterN; gj++)
+            for (int gi = 0; gi < waterN; gi++)
+            {
+                var p = new Vector2(Min + gi * WaterCell, Min + gj * WaterCell);
+                float best = Vector2.Distance(p, LakeCentre) - LakeRadius, level = LakeLevel;
+                if (p.x > 1000f && p.y > 1000f)
+                {
+                    for (int i = 0; i < RiverPts.Length; i += 2)
+                    {
+                        float d = Vector2.Distance(p, RiverPts[i]) - RiverHalf;
+                        if (d < best) { best = d; level = RiverLevel[i]; }
+                    }
+                }
+                waterDist[gj * waterN + gi] = Mathf.Min(best, reach);
+                waterLevel[gj * waterN + gi] = level;
+            }
+        }
+
+        // Distance past the nearest water's edge (negative = in the water) and its surface level.
+        public static float WaterDistance(float x, float z, out float level)
+        {
+            float fx = Mathf.Clamp((x - Min) / WaterCell, 0f, waterN - 1.001f), fz = Mathf.Clamp((z - Min) / WaterCell, 0f, waterN - 1.001f);
+            int i = (int)fx, j = (int)fz;
+            float tx = fx - i, tz = fz - j;
+            int a = j * waterN + i;
+            float d = Mathf.Lerp(Mathf.Lerp(waterDist[a], waterDist[a + 1], tx), Mathf.Lerp(waterDist[a + waterN], waterDist[a + waterN + 1], tx), tz);
+            level = Mathf.Lerp(Mathf.Lerp(waterLevel[a], waterLevel[a + 1], tx), Mathf.Lerp(waterLevel[a + waterN], waterLevel[a + waterN + 1], tx), tz);
+            return d;
+        }
+
         // ---- Heights ----
 
-        // Final ground height: city rules inside the city, otherwise countryside pulled onto the roads.
+        // Final ground height: city rules inside the city, otherwise countryside pulled onto the roads
+        // that run at ground level, and kept under the bridge decks.
         public static float Height(float x, float z)
         {
             if (InCity(x, z)) return CityLayout.Height(x, z);
+            float h = PulledGround(x, z, false, out int n, out var near);
+            for (int k = 0; k < n; k++)
+                if (near[k].elevated && near[k].d <= near[k].road.halfWidth + 2f)
+                    h = Mathf.Min(h, near[k].y - DeckDepth - 0.2f);
+            return h;
+        }
+
+        // Ground pulled onto the ground-level roads nearby (or only the highway). Where two roads both
+        // claim a point, the one whose paving is nearer wins.
+        static float PulledGround(float x, float z, bool highwayOnly, out int n, out RoadHit[] near)
+        {
             float nat = Natural(x, z);
-            float bestW = 0f, target = nat;
-            int n = Query(x, z, 45f, out var near);
+            float bestW = 0f, bestEdge = float.MaxValue, target = nat;
+            n = Query(x, z, 45f, out near);
             for (int k = 0; k < n; k++)
             {
                 var road = near[k].road;
+                if (near[k].elevated || (highwayOnly && !road.highway)) continue;
                 float d = near[k].d, y = near[k].y;
                 // Flat verge wider than a terrain cell's diagonal (8 m grid), so no ground triangle that
                 // overlaps the paving can tilt up over it in a cutting.
                 float core = road.halfWidth + Verge;
                 float fall = road.highway ? 42f : 26f;
                 float w = d <= core ? 1f : 1f - Smooth((d - core) / fall);
-                if (w > bestW) { bestW = w; target = y - 0.06f; }
+                float edge = d - road.halfWidth;
+                if (w > bestW + 1e-4f || (w >= 1f && bestW >= 1f && edge < bestEdge))
+                {
+                    bestW = w;
+                    bestEdge = edge;
+                    target = y - 0.06f;
+                }
             }
             return Mathf.Lerp(nat, target, bestW);
         }
 
-        // Countryside without roads: blends out of the city's hills into bigger rolling country,
-        // rising towards a ring of high ground near the world edge.
+        // Height of the paved surface at (x, z) nearest to 'nearY' (decks stack at flyovers), or the
+        // ground where there is no road.
+        public static float SurfaceHeight(float x, float z, float nearY)
+        {
+            if (InCity(x, z)) return CityLayout.Height(x, z);
+            int n = Query(x, z, 1f, out var near);
+            float best = float.NaN, bestDy = float.MaxValue;
+            for (int k = 0; k < n; k++)
+            {
+                if (near[k].d > near[k].road.halfWidth + 0.5f) continue;
+                float y = near[k].y + near[k].road.Lift;
+                float dy = Mathf.Abs(y - nearY);
+                if (dy < bestDy) { bestDy = dy; best = y; }
+            }
+            return float.IsNaN(best) ? Height(x, z) : best;
+        }
+
+        // Countryside with the river valley and lake basin carved in.
         public static float Natural(float x, float z)
+        {
+            float nat = Natural0(x, z);
+            float d = WaterDistance(x, z, out float level);
+            if (d > 200f) return nat;
+            float bank = d < -6f ? level - 2.5f
+                : d < 6f ? level - 2.5f + 3.3f * Smooth((d + 6f) / 12f)
+                : level + 0.8f + 40f * Smooth((d - 6f) / 160f);
+            return Mathf.Min(nat, bank);
+        }
+
+        // Countryside without water: blends out of the city's hills into bigger rolling country,
+        // rising towards a ring of high ground near the world edge.
+        public static float Natural0(float x, float z)
         {
             float city = CityLayout.Height(x, z);
             float dx = Mathf.Max(CityLayout.Min - x, 0f, x - CityLayout.Max);
@@ -122,11 +272,14 @@ namespace Racing
         {
             public Road road;
             public float d, y;
+            public int i;
+            public bool elevated;
         }
 
-        static readonly RoadHit[] hits = new RoadHit[8];
-        static readonly int[] bestIdx = new int[8];
-        static readonly float[] bestD2 = new float[8];
+        const int MaxRoads = 32;
+        static readonly RoadHit[] hits = new RoadHit[MaxRoads];
+        static readonly int[] bestIdx = new int[MaxRoads];
+        static readonly float[] bestD2 = new float[MaxRoads];
 
         // Every road within (halfWidth + extra) of (x, z): lateral distance from the centre line and
         // profile height. Results are valid until the next call (shared buffer, main thread only).
@@ -170,7 +323,8 @@ namespace Racing
                     float dist = Mathf.Sqrt(px * px + pz * pz);
                     if (dist < d) { d = dist; y = Mathf.Lerp(road.pts[a].y, road.pts[b].y, t); }
                 }
-                hits[count++] = new RoadHit { road = road, d = d, y = y };
+                bool elev = road.elevated != null && road.elevated[bi];
+                hits[count++] = new RoadHit { road = road, d = d, y = y, i = bi, elevated = elev };
             }
             return count;
         }
@@ -184,26 +338,54 @@ namespace Racing
             return best;
         }
 
+        // True when (x, z) lies on the paving of a road other than 'self' at about height y (within
+        // 'margin' of its edge; 'padMargin' for terminal pads, whose rims carry their own parapet).
+        public static bool OnOtherPaving(Road self, Vector3 p, float margin = 0.3f, float dy = 2.5f, float padMargin = float.NaN)
+        {
+            int n = Query(p.x, p.z, Mathf.Max(margin, 0f) + 1f, out var near);
+            for (int k = 0; k < n; k++)
+            {
+                float m = near[k].road.pad && !float.IsNaN(padMargin) ? padMargin : margin;
+                if (near[k].road != self && near[k].d < near[k].road.halfWidth + m && Mathf.Abs(near[k].y - p.y) < dy) return true;
+            }
+            return false;
+        }
+
+        // Paving of any road other than 'self' below height y (piers must not stand on it).
+        public static bool OverLowerPaving(Road self, Vector3 p, float margin)
+        {
+            int n = Query(p.x, p.z, margin + 1f, out var near);
+            for (int k = 0; k < n; k++)
+                if (near[k].road != self && near[k].d < near[k].road.halfWidth + margin && near[k].y < p.y - 2f) return true;
+            return false;
+        }
+
         static long Key(int x, int z) => ((long)x << 32) ^ (uint)z;
 
-        // Dev check (-validateworld): ground poking through the paved surface of any road.
+        // Dev check (-validateworld): ground poking through the paved surface (or a deck) of any road.
         public static void Validate()
         {
             foreach (var road in Roads)
             {
                 float worst = 0f;
                 Vector3 at = Vector3.zero;
-                int bad = 0;
+                int bad = 0, decks = 0;
                 for (int i = 0; i < road.Count; i++)
-                for (float o = -road.halfWidth; o <= road.halfWidth; o += 2f)
                 {
-                    Vector3 p = road.pts[i] + road.right[i] * o;
-                    float above = Height(p.x, p.z) - road.pts[i].y;
-                    if (above > 0.02f) bad++;
-                    if (above > worst) { worst = above; at = p; }
+                    if (road.elevated[i]) decks++;
+                    for (float o = -road.halfWidth; o <= road.halfWidth; o += 2f)
+                    {
+                        Vector3 p = road.pts[i] + road.right[i] * o;
+                        if (OnOtherPaving(road, p, -0.5f, 0.6f)) continue; // ramp mouths overlap
+                        float limit = road.elevated[i] ? road.pts[i].y - DeckDepth + 0.05f : road.pts[i].y;
+                        float above = Height(p.x, p.z) - limit;
+                        if (above > 0.02f) bad++;
+                        if (above > worst) { worst = above; at = p; }
+                    }
                 }
-                Debug.Log($"[World] {road.name} len={road.Length:F0} samples={road.Count} groundAbove>2cm={bad} worst={worst:F2} at {at:F0}");
+                Debug.Log($"[World] {road.name} len={road.Length:F0} samples={road.Count} deck={decks} groundAbove>2cm={bad} worst={worst:F2} at {at:F0}");
             }
+            Debug.Log($"[World] lake level {LakeLevel:F1}, river {RiverLevel[0]:F1} -> {RiverLevel[RiverLevel.Length - 1]:F1}");
         }
 
         // ---- Construction ----
@@ -212,6 +394,9 @@ namespace Racing
         {
             Roads.Clear();
             National.Clear();
+            Ramps.Clear();
+            Pads.Clear();
+            Interchanges.Clear();
             Junctions.Clear();
             hash.Clear();
 
@@ -228,43 +413,190 @@ namespace Racing
                 ring.Add(Centre + new Vector2(rx, rz) * r);
             }
             Highway = MakeRoad("Highway", Resample(ring, true, 4f), true, true, HighwayHalf);
-            Profile(Highway, 160f, 0.045f, float.NaN, float.NaN);
+            // Profiles ignore the river, so roads bridge the valley instead of dipping into it.
+            Profile(Highway, 160f, 0.045f, float.NaN, -1, 0f);
             Register(Highway);
+            for (int e = 0; e < Exits.Length; e++) BuildInterchange(e);
 
-            // National roads: out of each exit, then winding across country to the ring's inner edge.
-            for (int e = 0; e < Exits.Length; e++)
-            {
-                var ex = Exits[e];
-                int j = RingIndex(ex.ringAngle);
-                Junctions.Add(j);
-                Vector2 ringPt = Flat(Highway.pts[j]);
-                Vector2 inward = (Centre - ringPt).normalized;
-                Vector2 end = ringPt + inward * (HighwayHalf - 1f);
-                Vector2 approach = ringPt + inward * (HighwayHalf + 70f);
-                Vector2 start = ex.edge, lead = start + ex.dir * 90f;
-                var ctrl = new List<Vector2> { start - ex.dir * 4f, start, lead };
-                Vector2 span = approach - lead;
-                Vector2 perp = new Vector2(-span.y, span.x).normalized;
-                int bends = Mathf.Max(2, Mathf.RoundToInt(span.magnitude / 170f));
-                for (int b = 1; b < bends; b++)
-                {
-                    float t = b / (float)bends;
-                    float amp = (55f + 25f * Mathf.Sin(e * 2.3f + b)) * (b % 2 == 0 ? 1f : -1f);
-                    ctrl.Add(lead + span * t + perp * amp);
-                }
-                ctrl.Add(approach);
-                ctrl.Add(end);
-                var pts = Resample(CatmullRom(ctrl), false, 4f);
-                // Drop the run-in: the road starts where it leaves the city square.
-                while (pts.Count > 2 && InCity(pts[1].x, pts[1].y)) pts.RemoveAt(0);
-                pts[0] = start;
-                var road = MakeRoad("National" + e, pts, false, false, NationalHalf);
-                float startY = CityLayout.Height(start.x, start.y);
-                Profile(road, 60f, 0.075f, startY, Highway.pts[j].y);
-                National.Add(road);
-                Register(road);
-            }
+            // Water goes in once the road heights are known (it must pass under them), then decks.
+            BuildWater();
+            MarkDecks(Highway, Natural);
+            foreach (var road in National) MarkDecks(road, HighwayGround);
+            foreach (var road in Ramps) MarkDecks(road, HighwayGround);
+            foreach (var road in Pads) MarkDecks(road, HighwayGround);
             BuildGraph();
+        }
+
+        static float HighwayGround(float x, float z) => PulledGround(x, z, true, out _, out _);
+
+        // National road e: out of its city exit, winding across country, then straight over the ring
+        // on a flyover to the outer ramp terminal. Plus the four ramps of its diamond interchange.
+        static void BuildInterchange(int e)
+        {
+            var ex = Exits[e];
+            int j = RingIndex(ex.ringAngle);
+            Junctions.Add(j);
+            Vector3 hj = Highway.pts[j];
+            Vector2 c = Flat(hj), r = Flat(Highway.right[j]);
+            float D = TerminalOffset;
+            Vector2 L(float l) => c + r * l; // along the ring's normal (+ = outside)
+
+            Vector2 start = ex.edge, lead = start + ex.dir * 90f;
+            var ctrl = new List<Vector2> { start - ex.dir * 4f, start, lead };
+            Vector2 approach = L(-D - 130f);
+            Vector2 span = approach - lead;
+            Vector2 perp = new Vector2(-span.y, span.x).normalized;
+            int bends = Mathf.Max(2, Mathf.RoundToInt(span.magnitude / 170f));
+            for (int b = 1; b < bends; b++)
+            {
+                float t = b / (float)bends;
+                float amp = (55f + 25f * Mathf.Sin(e * 2.3f + b)) * (b % 2 == 0 ? 1f : -1f);
+                ctrl.Add(lead + span * t + perp * amp);
+            }
+            ctrl.Add(approach);
+            ctrl.Add(L(-D - 60f));
+            ctrl.Add(L(-D));
+            ctrl.Add(L(0f));
+            ctrl.Add(L(D));
+            ctrl.Add(L(D + 7f));
+            var pts = Resample(CatmullRom(ctrl), false, 4f);
+            // Drop the run-in: the road starts where it leaves the city square.
+            while (pts.Count > 2 && InCity(pts[1].x, pts[1].y)) pts.RemoveAt(0);
+            pts[0] = start;
+            var road = MakeRoad("National" + e, pts, false, false, NationalHalf);
+            int inner = Nearest(road, L(-D)), outer = Nearest(road, L(D));
+            float deckY = hj.y + BridgeRise;
+            Profile(road, 60f, 0.075f, CityLayout.Height(start.x, start.y), inner, deckY);
+            National.Add(road);
+            Register(road);
+
+            var ic = new Interchange { j = j, national = road, natInner = inner, natOuter = outer };
+            float eo = HighwayHalf + RampHalf - 0.3f, tn = NationalHalf - 1f;
+            // (s along the ring in metres, l across it), in driving order.
+            // Ramps run beside the ring and taper into its outer lane, so the paving is continuous.
+            float tp = HighwayHalf - 2.5f, lr = RampReach;
+            ic.offOuter = Ramp("OffRampOuter" + e, j, deckY, new[] { V(-lr - 40, tp), V(-lr, eo - 2), V(-250, eo), V(-190, eo + 5), V(-130, D - 14), V(-75, D - 2), V(-35, D), V(-tn, D) });
+            ic.onOuter = Ramp("OnRampOuter" + e, j, deckY, new[] { V(tn, D), V(35, D), V(75, D - 2), V(130, D - 14), V(190, eo + 5), V(250, eo), V(lr, eo - 2), V(lr + 40, tp) });
+            ic.offInner = Ramp("OffRampInner" + e, j, deckY, new[] { V(lr + 40, -tp), V(lr, -eo + 2), V(250, -eo), V(190, -eo - 5), V(130, -D + 14), V(75, -D + 2), V(35, -D), V(tn, -D) });
+            ic.onInner = Ramp("OnRampInner" + e, j, deckY, new[] { V(-tn, -D), V(-35, -D), V(-75, -D + 2), V(-130, -D + 14), V(-190, -eo - 5), V(-250, -eo), V(-lr, -eo + 2), V(-lr - 40, -tp) });
+            // Paved pads at the ramp terminals, so turning traffic can cut the corners.
+            ic.padInner = Pad("PadInner" + e, road, inner, deckY);
+            ic.padOuter = Pad("PadOuter" + e, road, outer, deckY);
+            Interchanges.Add(ic);
+
+            static Vector2 V(float s, float l) => new Vector2(s, l);
+        }
+
+        // World point at (s metres along the ring from sample j, l metres across it) at height y.
+        public static Vector3 RingPoint(int j, float s, float l, float y)
+        {
+            Vector2 p = RingFrame(j, new Vector2(s, l), out _);
+            return new Vector3(p.x, y, p.y);
+        }
+
+        // Point at (s metres along the ring from sample j, l metres across it).
+        static Vector2 RingFrame(int j, Vector2 sl, out float y)
+        {
+            float spacing = Highway.dist[1];
+            float f = j + sl.x / spacing;
+            int a = Mathf.FloorToInt(f);
+            float t = f - a;
+            Vector3 p = Vector3.Lerp(Highway.pts[Highway.Wrap(a)], Highway.pts[Highway.Wrap(a + 1)], t);
+            Vector3 rt = Vector3.Lerp(Highway.right[Highway.Wrap(a)], Highway.right[Highway.Wrap(a + 1)], t).normalized;
+            y = p.y;
+            return Flat(p + rt * sl.y);
+        }
+
+        // One-way ramp between the ring (level with it) and a terminal at deck height on the flyover.
+        static Road Ramp(string name, int j, float deckY, Vector2[] sl)
+        {
+            var ctrl = new List<Vector2>();
+            foreach (var p in sl) ctrl.Add(RingFrame(j, p, out _));
+            var road = MakeRoad(name, Resample(CatmullRom(ctrl), false, 4f), false, false, RampHalf);
+            road.ramp = true;
+            int n = road.Count;
+            float lo = HighwayHalf + RampHalf + 1f, hi = TerminalOffset - 3f;
+            var pinned = new bool[n];
+            var y = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                // Lateral distance from the ring decides how far up the ramp has climbed.
+                int hn = Query(road.pts[i].x, road.pts[i].z, 400f, out var near);
+                float d = float.MaxValue, hy = deckY;
+                for (int k = 0; k < hn; k++)
+                    if (near[k].road == Highway) { d = near[k].d; hy = near[k].y; }
+                float u = Smooth(Mathf.InverseLerp(lo, hi, d));
+                y[i] = Mathf.Lerp(hy, deckY, u);
+                pinned[i] = d < lo || i < 2 && sl[0].y * sl[0].y > hi * hi || i > n - 3 && sl[sl.Length - 1].y * sl[sl.Length - 1].y > hi * hi;
+            }
+            // The blend of the ring's own (smooth) profile and the deck height is already smooth; just
+            // ease out the corners where the ramp starts to climb, keeping the pinned ends exact.
+            for (int pass = 0; pass < 4; pass++)
+            {
+                var prev = (float[])y.Clone();
+                for (int i = 1; i < n - 1; i++)
+                    if (!pinned[i]) y[i] = (prev[i - 1] + prev[i] * 2f + prev[i + 1]) * 0.25f;
+            }
+            for (int i = 0; i < n; i++) road.pts[i].y = y[i];
+            Ramps.Add(road);
+            Register(road);
+            return road;
+        }
+
+        // A round paved pad (a 1 m road with a 12 m half width) centred on national road sample i.
+        static Road Pad(string name, Road national, int i, float y)
+        {
+            Vector3 c = national.pts[i], t = new Vector3(-national.right[i].z, 0f, national.right[i].x);
+            var road = MakeRoad(name, new List<Vector2> { Flat(c - t * 0.5f), Flat(c + t * 0.5f) }, false, false, PadRadius);
+            road.pad = true;
+            for (int k = 0; k < road.Count; k++) road.pts[k].y = y;
+            Pads.Add(road);
+            Register(road);
+            return road;
+        }
+
+        static int Nearest(Road road, Vector2 p)
+        {
+            int best = 0;
+            float bd = float.MaxValue;
+            for (int i = 0; i < road.Count; i++)
+            {
+                float d = (Flat(road.pts[i]) - p).sqrMagnitude;
+                if (d < bd) { bd = d; best = i; }
+            }
+            return best;
+        }
+
+        // Bridge decks: samples well above the ground beneath (runs shorter than 4 samples dropped).
+        static void MarkDecks(Road road, System.Func<float, float, float> ground)
+        {
+            int n = road.Count;
+            road.elevated = new bool[n];
+            for (int i = 0; i < n; i++)
+            {
+                Vector3 p = road.pts[i];
+                float g = ground(p.x, p.z);
+                // Check the edges too: a deck on a side slope needs the low side.
+                foreach (float o in new[] { -road.halfWidth, road.halfWidth })
+                {
+                    Vector3 q = p + road.right[i] * o;
+                    g = Mathf.Min(g, ground(q.x, q.z) + 1.5f);
+                }
+                road.elevated[i] = p.y - g > BridgeClearance && !InCity(p.x, p.z);
+            }
+            for (int pass = 0; pass < 2; pass++)
+            {
+                bool want = pass == 0; // first fill short gaps in decks, then drop short decks
+                for (int i = 0; i < n;)
+                {
+                    int k = i;
+                    while (k < n && road.elevated[k] == road.elevated[i]) k++;
+                    bool atEnd = !road.closed && (i == 0 || k == n);
+                    if (road.elevated[i] != want && k - i < 4 && !atEnd)
+                        for (int m = i; m < k; m++) road.elevated[m] = want;
+                    i = k;
+                }
+            }
         }
 
         public static int RingIndex(float degrees)
@@ -299,12 +631,13 @@ namespace Racing
             return road;
         }
 
-        // Smoothed natural height along the road, grade-limited, optionally pinned at both ends.
-        static void Profile(Road road, float sigma, float grade, float startY, float endY)
+        // Smoothed natural height (without the river) along the road, grade-limited. Optionally pinned
+        // to startY at the start and held at pinY from sample 'pinFrom' to the end.
+        static void Profile(Road road, float sigma, float grade, float startY, int pinFrom, float pinY)
         {
             int n = road.Count;
             var raw = new float[n];
-            for (int i = 0; i < n; i++) raw[i] = Natural(road.pts[i].x, road.pts[i].z);
+            for (int i = 0; i < n; i++) raw[i] = Natural0(road.pts[i].x, road.pts[i].z);
             var y = new float[n];
             int win = Mathf.CeilToInt(sigma * 2.5f / 4f);
             for (int i = 0; i < n; i++)
@@ -321,16 +654,25 @@ namespace Racing
                 }
                 y[i] = sum / wsum;
             }
-            if (!float.IsNaN(startY))
+            bool pinned = !float.IsNaN(startY);
+            int last = pinFrom >= 0 ? pinFrom : n - 1;
+            if (pinned)
             {
-                float d0 = startY - y[0], d1 = endY - y[n - 1];
-                for (int i = 0; i < n; i++) y[i] += Mathf.Lerp(d0, d1, road.dist[i] / road.Length);
+                float d0 = startY - y[0], d1 = pinY - y[last];
+                for (int i = 0; i <= last; i++) y[i] += Mathf.Lerp(d0, d1, road.dist[i] / road.dist[last]);
             }
+            void Pin()
+            {
+                if (!pinned) return;
+                y[0] = startY;
+                for (int i = last; i < n; i++) y[i] = pinY;
+            }
+            Pin();
             for (int pass = 0; pass < 4; pass++)
             {
                 for (int i = 1; i < n; i++) y[i] = Mathf.Clamp(y[i], y[i - 1] - grade * 4f, y[i - 1] + grade * 4f);
                 for (int i = n - 2; i >= 0; i--) y[i] = Mathf.Clamp(y[i], y[i + 1] - grade * 4f, y[i + 1] + grade * 4f);
-                if (!float.IsNaN(startY)) { y[0] = startY; y[n - 1] = endY; }
+                Pin();
             }
             for (int i = 0; i < n; i++) road.pts[i].y = y[i];
         }
@@ -441,25 +783,68 @@ namespace Racing
                 Link(ccw[k], ccw[(k + 1) % hn], false);
                 Link(cw[(k + 1) % hn], cw[k], false);
             }
+            int HighwayNode(Vector3 p, int[] chain)
+            {
+                int best = 0;
+                float bd = float.MaxValue;
+                for (int k = 0; k < chain.Length; k++)
+                {
+                    float d = (Graph[chain[k]].pos - p).sqrMagnitude;
+                    if (d < bd) { bd = d; best = chain[k]; }
+                }
+                return best;
+            }
 
-            // National roads, two-way, joined to their exit intersection and both carriageways.
+            // National roads, two-way, from their exit intersection over the flyover.
             for (int e = 0; e < National.Count; e++)
             {
+                var ic = Interchanges[e];
                 var road = National[e];
                 Vector2 ce = Exits[e].cityEnd;
                 int prev = grid[Mathf.RoundToInt(ce.x / CityLayout.Pitch), Mathf.RoundToInt(ce.y / CityLayout.Pitch)];
-                for (int i = 0; i < road.Count; i += 10)
+                int innerNode = -1, outerNode = -1;
+                for (int i = 0; i < road.Count; i++)
                 {
+                    bool key = i == ic.natInner || i == ic.natOuter || i == road.Count - 1;
+                    if (i % 10 != 0 && !key) continue;
                     int node = AddNode(road.pts[i]);
                     Link(prev, node);
                     prev = node;
+                    if (i == ic.natInner) innerNode = node;
+                    if (i == ic.natOuter) outerNode = node;
                 }
-                int last = AddNode(road.pts[road.Count - 1]);
-                Link(prev, last);
-                int k = Mathf.RoundToInt(Junctions[e] / (float)step) % hn;
-                Link(last, ccw[k]);
-                Link(last, cw[k]);
+                // Ramps, one-way: highway -> off ramp -> terminal, terminal -> on ramp -> highway.
+                int chainEnd = -1;
+                int Chain(Road ramp)
+                {
+                    int first = -1, last = -1;
+                    for (int i = 0; i < ramp.Count; i += 5)
+                    {
+                        int node = AddNode(ramp.pts[i]);
+                        if (last >= 0) Link(last, node, false);
+                        else first = node;
+                        last = node;
+                    }
+                    int end = AddNode(ramp.pts[ramp.Count - 1]);
+                    Link(last, end, false);
+                    chainEnd = end;
+                    return first;
+                }
+                int s0 = Chain(ic.offOuter);
+                Link(HighwayNode(ic.offOuter.pts[0], ccw), s0, false);
+                Link(chainEnd, outerNode, false);
+                s0 = Chain(ic.onOuter);
+                Link(outerNode, s0, false);
+                Link(chainEnd, NextOnChain(HighwayNode(ic.onOuter.pts[ic.onOuter.Count - 1], ccw)), false);
+                s0 = Chain(ic.offInner);
+                Link(HighwayNode(ic.offInner.pts[0], cw), s0, false);
+                Link(chainEnd, innerNode, false);
+                s0 = Chain(ic.onInner);
+                Link(innerNode, s0, false);
+                Link(chainEnd, NextOnChain(HighwayNode(ic.onInner.pts[ic.onInner.Count - 1], cw)), false);
             }
+
+            int NextOnChain(int node) => Graph[node].next.Count > 0 ? Graph[node].next[0] : node;
         }
 
         public static int NearestNode(Vector3 p, Vector3 heading)
@@ -469,9 +854,8 @@ namespace Racing
             for (int i = 0; i < Graph.Count; i++)
             {
                 Vector3 d = Graph[i].pos - p;
-                d.y = 0f;
-                float score = d.magnitude;
-                if (heading.sqrMagnitude > 0.01f && Vector3.Dot(d, heading) < -5f) score += 60f; // prefer ahead
+                float score = new Vector2(d.x, d.z).magnitude + Mathf.Abs(d.y) * 4f; // decks stack at flyovers
+                if (heading.sqrMagnitude > 0.01f && Vector3.Dot(new Vector3(d.x, 0f, d.z), heading) < -5f) score += 60f; // prefer ahead
                 if (score < bestScore) { bestScore = score; best = i; }
             }
             return best;

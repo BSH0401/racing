@@ -123,6 +123,13 @@ namespace Racing
                 enabled = false;
                 return;
             }
+            if (DevFlags.Has("-views"))
+            {
+                PrepareGrid();
+                gameObject.AddComponent<WorldViews>();
+                enabled = false;
+                return;
+            }
             if (DevFlags.Has("-showcase"))
             {
                 PrepareGrid();
@@ -285,8 +292,13 @@ namespace Racing
             if (r.driver) r.driver.enabled = !on;
         }
 
+        int fpsFrame;
+        float fpsTime;
+
         public void BeginCountdown()
         {
+            fpsFrame = Time.frameCount;
+            fpsTime = Time.unscaledTime;
             State = RaceState.Countdown;
             Countdown = 3f;
             lastBeep = 4;
@@ -422,8 +434,9 @@ namespace Racing
             var car = r.car;
             Vector3 v = car.Body.linearVelocity;
 
-            // Fell through the world or left the city.
-            bool lost = pos.y < WorldLayout.Height(pos.x, pos.z) - 4f || !WorldLayout.InBounds(pos, 2f);
+            // Fell through the world, into the river or out of the map.
+            bool lost = pos.y < WorldLayout.Height(pos.x, pos.z) - 4f || !WorldLayout.InBounds(pos, 2f)
+                || WorldLayout.WaterDistance(pos.x, pos.z, out float water) < 0f && pos.y < water - 0.6f;
             r.offTrackTimer = lost ? r.offTrackTimer + dt : 0f;
 
             bool flipped = r.transform.up.y < 0.3f && v.magnitude < 4f;
@@ -445,7 +458,12 @@ namespace Racing
             if (r.offTrackTimer > 0.5f || r.flipTimer > 2f || r.stuckTimer > 3f || (r.ai.enabled && r.reverseTimer > 2.5f))
             {
                 if (DevFlags.Has("-logrespawns"))
-                    Debug.Log($"[Respawn] {r.racerName} t={RaceTime:F1} pos={pos} terrain={WorldLayout.Height(pos.x, pos.z):F1} off={r.offTrackTimer:F1} flip={r.flipTimer:F1} stuck={r.stuckTimer:F1} reverse={r.reverseTimer:F1} cp={r.cpPassed}");
+                {
+                    var touching = new System.Text.StringBuilder();
+                    foreach (var col in Physics.OverlapSphere(pos, 3.5f))
+                        if (!col.transform.IsChildOf(r.transform)) touching.Append(col.transform.parent ? col.transform.parent.name + "/" : "").Append(col.name).Append(' ');
+                    Debug.Log($"[Respawn] {r.racerName} t={RaceTime:F1} pos={pos} terrain={WorldLayout.Height(pos.x, pos.z):F1} off={r.offTrackTimer:F1} flip={r.flipTimer:F1} stuck={r.stuckTimer:F1} reverse={r.reverseTimer:F1} cp={r.cpPassed} lane={track.LateralOffset(pos, r.index):F1} near: {touching}");
+                }
                 Respawn(r);
             }
         }
@@ -553,7 +571,7 @@ namespace Racing
             if (quitAfter > 0f && t >= quitAfter)
             {
                 if (Player)
-                    Debug.Log($"[Racing] fps={Time.frameCount / Mathf.Max(1f, Time.unscaledTime):F0} t={RaceTime:F1} state={State} playerPos={Player.position} lap={Player.CurrentLap(laps, CheckpointCount)} cp={Player.cpPassed} finished={Player.finished} best={Player.bestLap:F2}");
+                    Debug.Log($"[Racing] fps={Time.frameCount / Mathf.Max(1f, Time.unscaledTime):F0} raceFps={(Time.frameCount - fpsFrame) / Mathf.Max(1f, Time.unscaledTime - fpsTime):F0} load={fpsTime:F1}s t={RaceTime:F1} state={State} playerPos={Player.position} lap={Player.CurrentLap(laps, CheckpointCount)} cp={Player.cpPassed} finished={Player.finished} best={Player.bestLap:F2}");
                 if (Chasing && chase)
                     Debug.Log($"[Chase] mode={Mode} state={State} timeLeft={chase.TimeLeft:F1} dist={chase.Distance:F0} health={chase.TargetHealth:F2} bust={chase.Bust:F2} police={chase.PoliceCount} result={ResultTitle}");
                 foreach (var r in Standings)

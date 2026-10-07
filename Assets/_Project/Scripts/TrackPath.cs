@@ -14,7 +14,7 @@ namespace Racing
         public float spacing = 2f;
         public float roadHalfWidth = 7f;
         public float startDistance = 60f;
-        [Tooltip("Drape the resampled path onto the ground (WorldLayout heights).")]
+        [Tooltip("Drape the resampled path onto the road surface nearest its own height (WorldLayout).")]
         public bool followTerrain;
 
         Vector3[] points, tangents, rights;
@@ -68,7 +68,7 @@ namespace Racing
                 float seg = cum[j + 1] - cum[j];
                 float t = seg > 1e-5f ? (target - cum[j]) / seg : 0f;
                 points[i] = Vector3.Lerp(dense[j], dense[(j + 1) % d], t);
-                if (followTerrain) points[i].y = WorldLayout.Height(points[i].x, points[i].z);
+                if (followTerrain) points[i].y = WorldLayout.SurfaceHeight(points[i].x, points[i].z, points[i].y);
                 int ctrl = j / sub;
                 halfWidths[i] = widths ? Mathf.Min(controlHalfWidths[ctrl % n], controlHalfWidths[(ctrl + 1) % n]) : roadHalfWidth;
             }

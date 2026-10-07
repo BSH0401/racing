@@ -256,7 +256,7 @@ namespace Racing
                     if (dot > bestDot) { bestDot = dot; dir = e; }
                 }
             }
-            pos.y = WorldLayout.Height(pos.x, pos.z);
+            pos.y = WorldLayout.SurfaceHeight(pos.x, pos.z, pos.y);
             r.car.Teleport(pos + Vector3.up * 0.8f, Quaternion.LookRotation(dir));
             r.ResetProgress(race.track.FindClosest(pos));
             r.car.InputLocked = false;
