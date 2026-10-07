@@ -75,7 +75,7 @@ namespace Racing
             laps = Mathf.Clamp(Mathf.RoundToInt(DevFlags.GetFloat("-laps", laps)), 1, 10);
             difficulty = (Difficulty)Mathf.Clamp(PlayerPrefs.GetInt("difficulty", (int)difficulty), 0, 2);
             baseTimeScale = DevFlags.GetFloat("-timescale", 1f);
-            Mode = (GameMode)Mathf.Clamp(PlayerPrefs.GetInt("mode", 0), 0, 2);
+            Mode = (GameMode)Mathf.Clamp(PlayerPrefs.GetInt("mode", 0), 0, 3);
             string devMode = DevFlags.Get("-mode");
             if (!string.IsNullOrEmpty(devMode) && System.Enum.TryParse(devMode, true, out GameMode m)) Mode = m;
             autopilot = DevFlags.Has("-autopilot");
@@ -225,7 +225,7 @@ namespace Racing
         }
         public void BackToMenu() => Transition(EnterMenu);
 
-        void Transition(System.Action action)
+        public void Transition(System.Action action)
         {
             if (!Transitioning) StartCoroutine(TransitionRoutine(action));
         }
@@ -248,6 +248,11 @@ namespace Racing
             Countdown = 3f;
             RaceTime = 0f;
             LastPrize = 0;
+            // Fresh cars and street furniture for every race.
+            CarDamage.RepairAll();
+            Breakable.ResetAll();
+            foreach (var r in racers)
+                if (r.TryGetComponent(out Nitro n)) n.Refill(0.5f);
 
             // Player starts at the back of the grid.
             int slot = 0;
@@ -300,8 +305,10 @@ namespace Racing
             fpsFrame = Time.frameCount;
             fpsTime = Time.unscaledTime;
             State = RaceState.Countdown;
-            Countdown = 3f;
-            lastBeep = 4;
+            // Free roam just drives off.
+            bool free = Chasing && Mode == GameMode.FreeRoam;
+            Countdown = free ? 0.01f : 3f;
+            lastBeep = free ? 0 : 4;
         }
 
         void StartRacing()
@@ -316,6 +323,8 @@ namespace Racing
             }
             sfx.PlayOneShot(go, 0.4f);
             hud.Flash("GO!", 1f);
+            if (DevFlags.Has("-batter") && Player) Player.GetComponent<CarDamage>().Batter();
+            if (DevFlags.Has("-smash") && Player) Breakable.SmashNear(Player.transform.position, DevFlags.GetFloat("-smash", 150f), Player.transform.forward * 10f);
             if (Chasing) chase.OnGo();
         }
 
@@ -473,6 +482,14 @@ namespace Racing
         // Back onto the route: at the nearest route point if close to it, otherwise at the last checkpoint.
         public void Respawn(Racer r)
         {
+            if (Chasing && Mode == GameMode.FreeRoam && chase.Active)
+            {
+                chase.RespawnFree(r);
+                r.stuckTimer = r.flipTimer = r.offTrackTimer = r.wrongWayTimer = r.reverseTimer = 0f;
+                r.respawns++;
+                if (r.isPlayer && chaseCamera) chaseCamera.Snap();
+                return;
+            }
             int idx = r.index;
             if (Flat(r.transform.position - track.Point(idx)).sqrMagnitude > 30f * 30f)
                 idx = r.cpPassed > 0 ? checkpoints[r.lastCp] : track.FindClosest(r.transform.position);
@@ -572,10 +589,15 @@ namespace Racing
             {
                 if (Player)
                     Debug.Log($"[Racing] fps={Time.frameCount / Mathf.Max(1f, Time.unscaledTime):F0} raceFps={(Time.frameCount - fpsFrame) / Mathf.Max(1f, Time.unscaledTime - fpsTime):F0} load={fpsTime:F1}s t={RaceTime:F1} state={State} playerPos={Player.position} lap={Player.CurrentLap(laps, CheckpointCount)} cp={Player.cpPassed} finished={Player.finished} best={Player.bestLap:F2}");
+                Debug.Log($"[Damage] dentedMeshes={CarDamage.Dented} unreadableHits={CarDamage.Unreadable} playerSmoke={(Player ? Player.GetComponent<CarDamage>().SmokeDebug() : "-")}");
                 if (Chasing && chase)
                     Debug.Log($"[Chase] mode={Mode} state={State} timeLeft={chase.TimeLeft:F1} dist={chase.Distance:F0} health={chase.TargetHealth:F2} bust={chase.Bust:F2} police={chase.PoliceCount} result={ResultTitle}");
                 foreach (var r in Standings)
-                    Debug.Log($"[Racing] P{r.position} {r.racerName} cps={r.cpPassed} finished={r.finished} time={r.finishTime:F2} best={r.bestLap:F2} respawns={r.respawns}");
+                {
+                    var n = r.GetComponent<Nitro>();
+                    var dmg = r.GetComponent<CarDamage>();
+                    Debug.Log($"[Racing] P{r.position} {r.racerName} cps={r.cpPassed} finished={r.finished} time={r.finishTime:F2} best={r.bestLap:F2} respawns={r.respawns} nitroUses={(n ? n.Uses : 0)} nearMiss={(n ? n.NearMissCount : 0)} health={(dmg ? dmg.Health : 1f):F2}");
+                }
                 quitAfter = 0f;
                 Quit();
             }

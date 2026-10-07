@@ -114,8 +114,11 @@ namespace Racing
             (ba.center, bb.center) = (bb.center, ba.center);
             (ba.size, bb.size) = (bb.size, ba.size);
             (ca.carId, cb.carId) = (cb.carId, ca.carId);
-            ca.ApplySpec(Find(ca.carId));
-            cb.ApplySpec(Find(cb.carId));
+            // Tuning upgrades belong to the player's garage: only the player's car gets them.
+            ca.ApplySpec(Find(ca.carId), a.isPlayer);
+            cb.ApplySpec(Find(cb.carId), b.isPlayer);
+            if (a.TryGetComponent(out Nitro na)) na.Fit();
+            if (b.TryGetComponent(out Nitro nb)) nb.Fit();
         }
 
         static void Reparent(Transform t, Transform parent)
@@ -131,9 +134,58 @@ namespace Racing
         // Gives the player the car with this id, handing the player's current car to whoever drove it.
         public static void Equip(Racer player, System.Collections.Generic.IEnumerable<Racer> racers, string id)
         {
-            if (player.GetComponent<CarController>().carId == id) return;
+            var car = player.GetComponent<CarController>();
+            if (car.carId == id) { car.ApplySpec(Find(id), true); return; }
             foreach (var r in racers)
                 if (r != player && r.GetComponent<CarController>().carId == id) { Swap(player, r); return; }
+        }
+    }
+
+    public enum TunePart { Engine, Gearbox, Tyres, Nitro, Armor }
+
+    // Performance upgrades bought per car with race credits (levels 0-3, saved in PlayerPrefs).
+    public static class Tuning
+    {
+        public const int MaxLevel = 3;
+        public static readonly TunePart[] Parts = { TunePart.Engine, TunePart.Gearbox, TunePart.Tyres, TunePart.Nitro, TunePart.Armor };
+        static readonly string[] Names = { "ENGINE", "GEARBOX", "TYRES", "NITRO", "ARMOR" };
+        static readonly string[] Effects = { "+6% acceleration", "+3% top speed", "+3.5% grip", "+30% nitro tank", "-20% damage taken" };
+        static readonly int[] BasePrice = { 900, 1000, 800, 700, 600 };
+
+        public static string Name(TunePart p) => Names[(int)p];
+        public static string Effect(TunePart p) => Effects[(int)p];
+
+        public static int Level(string car, TunePart p) => Mathf.Clamp(PlayerPrefs.GetInt($"tune_{car}_{(int)p}", 0), 0, MaxLevel);
+
+        // Price of the next level, 0 when maxed.
+        public static int Price(string car, TunePart p)
+        {
+            int l = Level(car, p);
+            return l >= MaxLevel ? 0 : BasePrice[(int)p] * (l + 1);
+        }
+
+        public static bool TryBuy(string car, TunePart p)
+        {
+            int price = Price(car, p);
+            if (price == 0 || Garage.Credits < price) return false;
+            Garage.Credits -= price;
+            PlayerPrefs.SetInt($"tune_{car}_{(int)p}", Level(car, p) + 1);
+            PlayerPrefs.Save();
+            return true;
+        }
+
+        // Multiplier for one stat at the car's current level.
+        public static float Mul(string car, TunePart p)
+        {
+            int l = Level(car, p);
+            return p switch
+            {
+                TunePart.Engine => 1f + 0.06f * l,
+                TunePart.Gearbox => 1f + 0.03f * l,
+                TunePart.Tyres => 1f + 0.035f * l,
+                TunePart.Nitro => 1f + 0.3f * l,
+                _ => 1f - 0.2f * l,
+            };
         }
     }
 }

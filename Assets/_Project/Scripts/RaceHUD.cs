@@ -18,7 +18,10 @@ namespace Racing
         Text chaseLabel;
         Image chaseFill;
         Image fade;
-        float flashTimer;
+        float flashTimer, toastTimer;
+        // Nitro tank and car condition (bottom right), wanted stars (top right), short toasts.
+        Image nitroFill, healthFill;
+        Text starsText, toastText, hintText;
 
         void Awake()
         {
@@ -43,8 +46,14 @@ namespace Racing
             chaseFill.rectTransform.SetParent(c.Find("MeterBack"), false);
             chaseFill.rectTransform.anchoredPosition = Vector2.zero;
 
-            UIKit.Label(h, 20, TextAnchor.LowerLeft, new Vector2(0f, 0f), new Vector2(40f, 24f), new Vector2(1200f, 30f)).text =
-                "R reset car   C camera   ESC pause";
+            hintText = UIKit.Label(h, 20, TextAnchor.LowerLeft, new Vector2(0f, 0f), new Vector2(40f, 24f), new Vector2(1200f, 30f));
+            hintText.text = "SHIFT nitro   R reset car   C camera   ESC pause";
+
+            nitroFill = Bar(h, "NITRO", 222f, new Color(0.3f, 0.65f, 1f));
+            healthFill = Bar(h, "CAR", 192f, new Color(0.4f, 0.9f, 0.4f));
+            starsText = UIKit.Label(h, 64, TextAnchor.UpperRight, new Vector2(1f, 1f), new Vector2(-400f, -14f), new Vector2(600f, 90f));
+            toastText = UIKit.Label(root, 46, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, -170f), new Vector2(1400f, 70f));
+            toastText.fontStyle = FontStyle.Bold;
 
             centerText = UIKit.Label(root, 220, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(900f, 300f));
             flashText = UIKit.Label(root, 90, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0f, 120f), new Vector2(1400f, 160f));
@@ -73,6 +82,23 @@ namespace Racing
             SetFade(0f);
         }
 
+        // Labelled meter 'y' px above the bottom-right corner; returns the fill image (width = 300 * value).
+        static Image Bar(Transform parent, string label, float y, Color color)
+        {
+            var l = UIKit.Label(parent, 20, TextAnchor.MiddleRight, new Vector2(1f, 0f), new Vector2(-362f, y - 6f), new Vector2(120f, 24f));
+            l.text = label;
+            l.color = new Color(0.85f, 0.87f, 0.92f);
+            var back = UIKit.Rect(label + "Back", parent, new Vector2(1f, 0f), new Vector2(-48f, y), new Vector2(300f, 12f), new Color(0f, 0f, 0f, 0.55f));
+            var fill = UIKit.Rect(label + "Fill", back.transform, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(300f, 12f), color);
+            return fill;
+        }
+
+        public void Toast(string text)
+        {
+            toastText.text = text;
+            toastTimer = 1.6f;
+        }
+
         void SetFade(float a)
         {
             fade.color = new Color(0f, 0f, 0f, a);
@@ -95,6 +121,45 @@ namespace Racing
             flashTimer = seconds;
         }
 
+        // Free roam: credits up top, wanted stars, police / evade / busted status and meter.
+        void FreeRoam(Racer player, RaceState state)
+        {
+            var ch = race.chase;
+            int stars = ch.Stars;
+            posText.enabled = lapText.enabled = boardText.enabled = bestText.enabled = false;
+            wrongWayText.enabled = false;
+            timeText.text = $"{Garage.Credits:N0} CR";
+            timeText.color = new Color(1f, 0.85f, 0.3f);
+            speedText.text = $"<size=120><b>{Mathf.RoundToInt(player.car.SpeedKmh)}</b></size> km/h";
+            bool blink = ch.Hiding && Mathf.Repeat(Time.time * 2f, 1f) < 0.5f;
+            var sb = new StringBuilder();
+            for (int i = 0; i < 5; i++)
+                sb.Append(i < stars ? (blink ? "<color=#ffffff55>★</color>" : "<color=#ffd23a>★</color>") : "<color=#ffffff30>★</color>");
+            starsText.text = sb.ToString();
+            float meter = 0f;
+            if (stars == 0)
+            {
+                chaseLabel.text = "<size=26>FREE ROAM  ·  crash, smash and speed to get wanted</size>";
+            }
+            else if (ch.Bust > 0.02f)
+            {
+                chaseLabel.text = "<color=#ff6a5a><b>BUSTED!</b></color>";
+                meter = ch.Bust;
+                chaseFill.color = Mathf.Repeat(Time.time * 2.5f, 1f) < 0.5f ? new Color(1f, 0.15f, 0.15f) : new Color(0.2f, 0.4f, 1f);
+            }
+            else if (ch.Hiding)
+            {
+                chaseLabel.text = "<color=#7dff8a><b>OUT OF SIGHT</b></color>  ·  lie low";
+                meter = ch.EvadeProgress;
+                chaseFill.color = new Color(0.45f, 1f, 0.5f);
+            }
+            else
+            {
+                chaseLabel.text = $"POLICE  <b>{(ch.Distance < 9999f ? ch.Distance.ToString("F0") : "-")} m</b>   ·   {ch.PoliceCount} units";
+            }
+            chaseFill.rectTransform.sizeDelta = new Vector2(420f * meter, 18f);
+        }
+
         void Update()
         {
             if (!race) return;
@@ -105,7 +170,10 @@ namespace Racing
             resultPanel.SetActive(state == RaceState.Finished && !race.Paused);
             hudRoot.SetActive(state != RaceState.Menu);
 
-            centerText.text = state == RaceState.Countdown ? Mathf.CeilToInt(race.Countdown).ToString() : "";
+            centerText.text = state == RaceState.Countdown && race.Countdown > 0.5f ? Mathf.CeilToInt(race.Countdown).ToString() : "";
+            toastTimer -= Time.unscaledDeltaTime;
+            toastText.enabled = toastTimer > 0f && state != RaceState.Menu;
+            if (toastText.enabled) toastText.color = new Color(0.55f, 0.9f, 1f, Mathf.Clamp01(toastTimer / 0.4f));
 
             flashTimer -= Time.unscaledDeltaTime;
             flashText.enabled = flashTimer > 0f && state != RaceState.Menu;
@@ -113,6 +181,20 @@ namespace Racing
 
             bool chasing = race.Chasing;
             chaseRoot.SetActive(chasing);
+            if (player)
+            {
+                var nitro = player.GetComponent<Nitro>();
+                float amount = nitro ? nitro.Amount : 0f;
+                nitroFill.rectTransform.sizeDelta = new Vector2(300f * amount, 12f);
+                nitroFill.color = nitro && nitro.Active ? new Color(0.75f, 0.9f, 1f) : new Color(0.3f, 0.65f, 1f);
+                var damage = player.GetComponent<CarDamage>();
+                float health = damage ? damage.Health : 1f;
+                healthFill.rectTransform.sizeDelta = new Vector2(300f * health, 12f);
+                healthFill.color = Color.Lerp(new Color(1f, 0.25f, 0.2f), new Color(0.4f, 0.9f, 0.4f), health);
+            }
+            bool free = chasing && race.Mode == GameMode.FreeRoam;
+            starsText.enabled = free;
+            if (free && player) { FreeRoam(player, state); return; }
             posText.enabled = lapText.enabled = boardText.enabled = bestText.enabled = !chasing;
             againText.text = chasing ? "ENTER  play again        ESC  main menu" : "ENTER  race again        ESC  main menu";
             if (chasing && player)

@@ -3,14 +3,15 @@ using UnityEngine;
 
 namespace Racing
 {
-    public enum GameMode { Race, Pursuit, Escape }
+    public enum GameMode { Race, Pursuit, Escape, FreeRoam }
 
     // The two chase modes, layered on top of RaceManager's countdown / pause / results flow.
     //  Pursuit: a suspect flees round the city; ram it until its damage bar runs out before time is up
     //           or it gets too far away.
     //  Escape:  police cars hunt the player through the street grid; survive the timer or get far
     //           enough away to lose them. Stopping with a police car alongside fills the BUSTED meter.
-    public class ChaseMode : MonoBehaviour
+    //  Free roam: drive anywhere; crimes raise a wanted level (see ChaseMode.FreeRoam.cs).
+    public partial class ChaseMode : MonoBehaviour
     {
         public RaceManager race;
         public Material sirenRed, sirenBlue;
@@ -53,7 +54,11 @@ namespace Racing
             var others = new List<Racer>();
             foreach (var r in race.racers) if (r != Player) others.Add(r);
 
-            if (mode == GameMode.Pursuit)
+            if (mode == GameMode.FreeRoam)
+            {
+                PrepareFreeRoam(others);
+            }
+            else if (mode == GameMode.Pursuit)
             {
                 TimeLeft = pursuitTime;
                 Target = others[Random.Range(0, others.Count)];
@@ -62,7 +67,7 @@ namespace Racing
                 Place(Target, 75f, 0f);
                 Target.ai.skill = 0.97f;
                 Siren(Player, true);
-                if (autopilot) Hunt(Player, Target);
+                if (autopilot) { Hunt(Player, Target); Player.chaser.useNitro = true; }
             }
             else
             {
@@ -124,7 +129,9 @@ namespace Racing
             if (r.driver) r.driver.enabled = false;
             r.chaser.target = prey;
             r.chaser.speedScale = 1f;
+            r.chaser.useNitro = false;
             r.chaser.enabled = true;
+            if (r.TryGetComponent(out CarDamage cd)) cd.toughness = 0.4f;
         }
 
         void Siren(Racer r, bool on)
@@ -149,6 +156,8 @@ namespace Racing
             {
                 r.gameObject.SetActive(true);
                 if (r.chaser) r.chaser.enabled = false;
+                if (r.ai) r.ai.nitroAllowed = true;
+                if (r.TryGetComponent(out CarDamage cd)) cd.toughness = 1f;
                 Siren(r, false);
             }
         }
@@ -156,7 +165,8 @@ namespace Racing
         public void OnGo()
         {
             release = Mode == GameMode.Escape ? 2f : 0f;
-            race.hud.Flash(Mode == GameMode.Pursuit ? "TAKE THEM DOWN!" : "LOSE THE COPS!", 1.6f);
+            race.hud.Flash(Mode switch { GameMode.Pursuit => "TAKE THEM DOWN!", GameMode.FreeRoam => "FREE ROAM", _ => "LOSE THE COPS!" }, 1.6f);
+            if (Mode == GameMode.FreeRoam) OnFreeRoamGo();
         }
 
         // True while a police car is pinning the player: don't treat it as stuck.
@@ -172,6 +182,7 @@ namespace Racing
                 Debug.Log($"[Chase] t={elapsed:F0} dist={Distance:F0} health={TargetHealth:F2} bust={Bust:F2} police={police.Count} playerKmh={Player.car.SpeedKmh:F0}");
             hitCooldown -= dt;
             if (Mode == GameMode.Pursuit) TickPursuit(dt);
+            else if (Mode == GameMode.FreeRoam) TickFreeRoam(dt);
             else TickEscape(dt);
         }
 
@@ -179,6 +190,8 @@ namespace Racing
         {
             Distance = Flat(Target.transform.position - Player.transform.position).magnitude;
             // The suspect eases off when far ahead and floors it when the player is close.
+            // A burst of nitro only to break away when the player closes in.
+            Target.ai.nitroAllowed = Distance < 45f;
             Target.ai.speedScale = Player.car.maxSpeed / Mathf.Max(1f, Target.car.maxSpeed) * Mathf.Lerp(1.02f, 0.84f, Mathf.InverseLerp(40f, 260f, Distance));
             lostTimer = Distance > LoseDistance ? lostTimer + dt : 0f;
             if (lostTimer > 6f) End(false, "SUSPECT ESCAPED", "The suspect got away.");
@@ -265,6 +278,7 @@ namespace Racing
         // Ramming the suspect: damage scales with the velocity change of the hit.
         public void OnImpact(Racer self, Collision c)
         {
+            if (Active && Mode == GameMode.FreeRoam) { FreeRoamImpact(self, c); return; }
             if (!Active || Mode != GameMode.Pursuit || self != Target || race.State != RaceState.Racing) return;
             if (c.rigidbody != Player.car.Body || hitCooldown > 0f) return;
             float dv = c.impulse.magnitude / Target.car.Body.mass;

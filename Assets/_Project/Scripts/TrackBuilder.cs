@@ -22,6 +22,9 @@ namespace Racing
         [Header("Street props (Poly Haven)")]
         public GameObject hydrant, trashCan, roadBarrier;
         public Material hydrantMaterial, trashCanMaterial, roadBarrierMaterial;
+        [Tooltip("Soft round particle (hydrant fountains, damage smoke) and the sound of a prop being hit.")]
+        public Material particleMaterial;
+        public AudioClip propHitClip;
         public float cell = 2f;
         public int seed = 7;
         public int cityLayer = 30;
@@ -52,6 +55,8 @@ namespace Racing
             BuildBlocks(root);
             BuildLamps(path, root);
             BuildStart(path, root);
+            Breakable.particleMaterial = particleMaterial;
+            Breakable.hitClip = propHitClip;
             BuildProps(path, root);
 
             SetFlags(root);
@@ -313,8 +318,8 @@ namespace Racing
                 float along = j * p + r + 12f + R() * (p - 2f * r - 24f);
                 Vector3 pos = Pt(axis, k * p + side * (r + 0.9f), along, CityLayout.CurbHeight);
                 float roll = R();
-                if (roll < 0.35f) Prop(props.transform, hydrant, hydrantMaterial, pos, R() * 360f, 0.85f);
-                else if (roll < 0.65f) Prop(props.transform, trashCan, trashCanMaterial, pos, R() * 360f, 1.0f);
+                if (roll < 0.35f) Prop(props.transform, hydrant, hydrantMaterial, pos, R() * 360f, 0.85f, Breakable.Kind.Hydrant);
+                else if (roll < 0.65f) Prop(props.transform, trashCan, trashCanMaterial, pos, R() * 360f, 1.0f, Breakable.Kind.Bin);
             }
 
             // Barriers on both kerbs either side of the start line.
@@ -328,13 +333,14 @@ namespace Racing
                 {
                     Vector3 pos = c + rt * s * (r + 0.7f);
                     pos.y = H(pos.x, pos.z) + CityLayout.CurbHeight;
-                    Prop(props.transform, roadBarrier, roadBarrierMaterial, pos, Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg + 90f, 1.0f, true);
+                    Prop(props.transform, roadBarrier, roadBarrierMaterial, pos, Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg + 90f, 1.0f, Breakable.Kind.Barrier);
                 }
             }
         }
 
-        // Instantiates a prop scaled to the given height (models may come in any unit).
-        void Prop(Transform parent, GameObject prefab, Material mat, Vector3 pos, float yaw, float height, bool collider = false)
+        // Instantiates a prop scaled to the given height (models may come in any unit), standing in a
+        // breakable holder: a box the size of the model on the car layer (wheel rays ignore it).
+        void Prop(Transform parent, GameObject prefab, Material mat, Vector3 pos, float yaw, float height, Breakable.Kind kind)
         {
             if (!prefab) return;
             var go = Instantiate(prefab, parent);
@@ -354,15 +360,24 @@ namespace Racing
                 if (mat) rr.sharedMaterial = mat;
                 rr.gameObject.layer = cityLayer;
             }
-            if (collider)
-            {
-                var box = go.AddComponent<BoxCollider>();
-                b = rends[0].bounds;
-                foreach (var rr in rends) b.Encapsulate(rr.bounds);
-                box.center = go.transform.InverseTransformPoint(b.center);
-                Vector3 size = go.transform.InverseTransformVector(b.size);
-                box.size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
-            }
+
+            // Holder at the model's centre, aligned with its yaw.
+            b = rends[0].bounds;
+            foreach (var rr in rends) b.Encapsulate(rr.bounds);
+            var holder = new GameObject(prefab.name + "_Breakable");
+            holder.layer = 2;
+            holder.transform.SetParent(parent, false);
+            holder.transform.SetPositionAndRotation(b.center, Quaternion.Euler(0f, yaw, 0f));
+            go.transform.SetParent(holder.transform, true);
+            var rb = holder.AddComponent<Rigidbody>();
+            rb.mass = kind switch { Breakable.Kind.Hydrant => 90f, Breakable.Kind.Bin => 25f, _ => 450f };
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            var box = holder.AddComponent<BoxCollider>();
+            Vector3 size = holder.transform.InverseTransformVector(b.size);
+            box.size = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z)) * 0.95f;
+            var br = holder.AddComponent<Breakable>();
+            br.kind = kind;
+            br.breakSpeed = kind == Breakable.Kind.Barrier ? 7f : 3f;
         }
 
         // Park tree: one of the countryside broadleaf variants.

@@ -8,19 +8,25 @@ namespace Racing
     public class PlayerDriver : MonoBehaviour
     {
         CarController car;
+        Nitro nitro;
         float keyboardSteer;
 
-        void Awake() => car = GetComponent<CarController>();
+        void Awake()
+        {
+            car = GetComponent<CarController>();
+            nitro = GetComponent<Nitro>();
+        }
 
         void OnDisable()
         {
             keyboardSteer = 0f;
+            if (nitro) nitro.Request = false;
         }
 
         void Update()
         {
             float throttle = 0f, steer = 0f;
-            bool handbrake = false;
+            bool handbrake = false, boost = false;
 
             var kb = Keyboard.current;
             if (kb != null)
@@ -35,6 +41,7 @@ namespace Racing
                 throttle += kt;
                 steer += keyboardSteer;
                 handbrake |= kb.spaceKey.isPressed;
+                boost |= kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
             }
 
             var gp = Gamepad.current;
@@ -44,11 +51,13 @@ namespace Racing
                 float stick = gp.leftStick.x.ReadValue();
                 steer += Mathf.Abs(stick) > 0.12f ? stick : 0f;
                 handbrake |= gp.buttonSouth.isPressed;
+                boost |= gp.buttonWest.isPressed;
             }
 
             car.Throttle = Mathf.Clamp(throttle, -1f, 1f);
             car.Steer = Mathf.Clamp(steer, -1f, 1f);
             car.Handbrake = handbrake;
+            if (nitro) nitro.Request = boost;
         }
     }
 }

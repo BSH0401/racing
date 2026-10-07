@@ -17,7 +17,7 @@ namespace Racing
         static readonly Color Accent = new Color(1f, 0.82f, 0.15f);
         static readonly Color PanelColor = new Color(0.03f, 0.04f, 0.07f, 0.8f);
 
-        enum Page { Main, Garage, Settings, Controls }
+        enum Page { Main, Garage, Tuning, Settings, Controls }
 
         class Item
         {
@@ -45,6 +45,9 @@ namespace Racing
         string garageMsg;
         float garageMsgTime;
         int devGarage = -1; // -garage N: open the garage on car N (screenshots)
+
+        // Tuning page.
+        Text tuneTitle, tuneInfo;
 
         void Awake()
         {
@@ -101,11 +104,12 @@ namespace Racing
             settingsText.color = new Color(0.75f, 0.77f, 0.82f);
 
             var version = UIKit.Label(t, 20, TextAnchor.UpperRight, new Vector2(1f, 1f), new Vector2(-40f, -30f), new Vector2(1100f, 30f));
-            version.text = "v0.11   ·   Cars: Sketchfab artists (CC BY 4.0, see README)  ·  Textures: ambientCG  ·  HDRI & props: Poly Haven  (CC0)";
+            version.text = "v0.12   ·   Cars: Sketchfab artists (CC BY 4.0, see README)  ·  Textures: ambientCG  ·  HDRI & props: Poly Haven  (CC0)";
             version.color = new Color(1f, 1f, 1f, 0.6f);
 
             BuildMain(panel.transform);
             BuildGarage(panel.transform);
+            BuildTuning(panel.transform);
             BuildSettings(panel.transform);
             BuildControls(panel.transform);
             Show(Page.Main);
@@ -119,8 +123,8 @@ namespace Racing
         {
             var list = NewPage(Page.Main, panel);
             AddItem(Page.Main, list, "START", null, d => { if (d > 0) StartRace(); });
-            AddItem(Page.Main, list, "MODE", () => race ? race.Mode.ToString().ToUpper() : "RACE",
-                d => race.SetMode((GameMode)Wrap((int)race.Mode + d, 0, 2)));
+            AddItem(Page.Main, list, "MODE", () => race ? ModeName(race.Mode) : "RACE",
+                d => race.SetMode((GameMode)Wrap((int)race.Mode + d, 0, 3)));
             AddItem(Page.Main, list, "GARAGE", null, d => { if (d > 0) Show(Page.Garage); });
             AddItem(Page.Main, list, "SETTINGS", null, d => { if (d > 0) Show(Page.Settings); });
             AddItem(Page.Main, list, "CONTROLS", null, d => { if (d > 0) Show(Page.Controls); });
@@ -151,27 +155,77 @@ namespace Racing
                 }
                 else Message($"NEED {spec.price - Garage.Credits:N0} MORE CR");
             });
+            AddItem(Page.Garage, list, "TUNING", null, d => { if (d > 0) Show(Page.Tuning); });
             AddItem(Page.Garage, list, "BACK", null, d => { if (d > 0) Show(Page.Main); });
 
             var page = pages[Page.Garage].transform;
-            carName = UIKit.Label(page, 46, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(84f, -666f), new Vector2(600f, 60f));
+            carName = UIKit.Label(page, 46, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(84f, -746f), new Vector2(600f, 60f));
             carName.fontStyle = FontStyle.Bold;
             carName.color = Accent;
-            carInfo = UIKit.Label(page, 25, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(84f, -722f), new Vector2(600f, 80f));
+            carInfo = UIKit.Label(page, 25, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(84f, -802f), new Vector2(600f, 80f));
             carInfo.color = new Color(0.85f, 0.87f, 0.92f);
             string[] stats = { "SPEED", "ACCEL", "GRIP" };
             statFill = new Image[stats.Length];
             for (int i = 0; i < stats.Length; i++)
             {
-                float y = -800f - i * 38f;
+                float y = -878f - i * 34f;
                 var label = UIKit.Label(page, 24, TextAnchor.MiddleLeft, new Vector2(0f, 1f), new Vector2(84f, y), new Vector2(140f, 30f));
                 label.text = stats[i];
                 label.color = new Color(0.7f, 0.72f, 0.78f);
                 UIKit.Rect("StatBack", page, new Vector2(0f, 1f), new Vector2(210f, y - 7f), new Vector2(360f, 16f), new Color(1f, 1f, 1f, 0.12f));
                 statFill[i] = UIKit.Rect("StatFill", page, new Vector2(0f, 1f), new Vector2(210f, y - 7f), new Vector2(360f, 16f), Accent);
             }
-            carStatus = UIKit.Label(page, 27, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(84f, -918f), new Vector2(600f, 80f));
+            carStatus = UIKit.Label(page, 27, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(84f, -982f), new Vector2(600f, 80f));
         }
+
+        // Upgrades for the selected car: each row buys the part's next level.
+        void BuildTuning(Transform panel)
+        {
+            var list = NewPage(Page.Tuning, panel);
+            list.anchoredPosition = new Vector2(80f, -400f);
+            foreach (var part in Tuning.Parts)
+            {
+                var p = part;
+                AddItem(Page.Tuning, list, Tuning.Name(p), () => $"LV {Tuning.Level(Garage.Selected, p)}/{Tuning.MaxLevel}", d =>
+                {
+                    if (d <= 0) return;
+                    string id = Garage.Selected;
+                    int price = Tuning.Price(id, p);
+                    if (price == 0) Message("FULLY UPGRADED");
+                    else if (Tuning.TryBuy(id, p))
+                    {
+                        Message($"{Tuning.Name(p)} LV {Tuning.Level(id, p)}");
+                        if (race && race.Player) Garage.Equip(race.Player, race.CarPool, id); // re-applies the tuned spec
+                    }
+                    else Message($"NEED {price - Garage.Credits:N0} MORE CR");
+                });
+            }
+            AddItem(Page.Tuning, list, "BACK", null, d => { if (d > 0) Show(Page.Garage); });
+            var page = pages[Page.Tuning].transform;
+            tuneTitle = UIKit.Label(page, 40, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(84f, -322f), new Vector2(600f, 60f));
+            tuneTitle.fontStyle = FontStyle.Bold;
+            tuneTitle.color = Accent;
+            tuneInfo = UIKit.Label(page, 26, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(84f, -962f), new Vector2(600f, 100f));
+        }
+
+        void RefreshTuning()
+        {
+            var spec = Garage.Find(Garage.Selected);
+            tuneTitle.text = "TUNING  ·  " + spec.displayName;
+            string info;
+            if (selected < Tuning.Parts.Length)
+            {
+                var p = Tuning.Parts[selected];
+                int price = Tuning.Price(spec.id, p);
+                info = $"{Tuning.Effect(p)} per level   ·   " + (price > 0 ? $"next <b>{price:N0} CR</b>" : "<color=#7dff8a>MAX</color>");
+            }
+            else info = "Upgrades stay with this car.";
+            if (garageMsg != null && Time.unscaledTime - garageMsgTime < 2.5f) info += $"\n<color=#ffd23a><b>{garageMsg}</b></color>";
+            else info += "\n";
+            tuneInfo.text = info + $"\nCREDITS  <b>{Garage.Credits:N0} CR</b>";
+        }
+
+        static string ModeName(GameMode m) => m == GameMode.FreeRoam ? "FREE ROAM" : m.ToString().ToUpper();
 
         void Preview()
         {
@@ -227,11 +281,12 @@ namespace Racing
                 "S / DOWN       brake / reverse\n" +
                 "A D / LEFT RIGHT   steer\n" +
                 "SPACE           handbrake\n" +
+                "SHIFT           nitro\n" +
                 "MOUSE           look around\n" +
                 "R  reset car     C  camera     ESC  pause\n\n" +
                 "<color=#ffd23a>GAMEPAD</color>\n" +
                 "RT / LT  throttle / brake     L-stick  steer     R-stick  look\n" +
-                "A  handbrake     Y  reset     RB  camera";
+                "A  handbrake     X  nitro     Y  reset     RB  camera";
             list.anchoredPosition = new Vector2(80f, -800f);
             AddItem(Page.Controls, list, "BACK", null, d => { if (d > 0) Show(Page.Main); });
         }
@@ -284,9 +339,10 @@ namespace Racing
                 for (int i = 0; i < Garage.Cars.Length; i++) if (Garage.Cars[i].id == Garage.Selected) garageIndex = i;
                 garageMsg = null;
             }
-            if (race && race.chaseCamera) race.chaseCamera.showcase = p == Page.Garage && race.Player ? race.Player.transform : null;
+            if (race && race.chaseCamera) race.chaseCamera.showcase = (p == Page.Garage || p == Page.Tuning) && race.Player ? race.Player.transform : null;
+            if (p == Page.Tuning) garageMsg = null;
             foreach (var kv in pages) kv.Value.SetActive(kv.Key == p);
-            footer.gameObject.SetActive(p != Page.Garage); // the car sheet needs the room
+            footer.gameObject.SetActive(p != Page.Garage && p != Page.Tuning); // the car sheet needs the room
             page = p;
             selected = 0;
             Refresh();
@@ -309,6 +365,7 @@ namespace Racing
                 garageIndex = devGarage % Garage.Cars.Length;
                 Preview();
                 devGarage = -1;
+                if (DevFlags.Has("-tuning")) Show(Page.Tuning);
             }
 
             shown += Time.unscaledDeltaTime;
@@ -331,7 +388,7 @@ namespace Racing
             var item = items[page][selected];
             if (item.getValue != null && (left || right)) Activate(right ? 1 : -1, false);
             else if (ok) Activate(1, true);
-            if (back && page != Page.Main) { sfx.PlayOneShot(tick, 0.25f); Show(Page.Main); }
+            if (back && page != Page.Main) { sfx.PlayOneShot(tick, 0.25f); Show(page == Page.Tuning ? Page.Garage : Page.Main); }
 
             if (kb != null && kb.tKey.wasPressedThisFrame && race.theme) { race.theme.Toggle(); Refresh(); }
             Refresh();
@@ -381,16 +438,19 @@ namespace Racing
             int finish = race ? race.BestFinishRecord : 0;
             if (race && race.Mode == GameMode.Pursuit)
                 recordText.text = "<size=27>Ram the fleeing suspect until it stops.</size>\nCREDITS   <b>" + Garage.Credits.ToString("N0") + "</b>";
+            else if (race && race.Mode == GameMode.FreeRoam)
+                recordText.text = "<size=27>Drive anywhere. Crimes bring the police.</size>\nCREDITS   <b>" + Garage.Credits.ToString("N0") + "</b>";
             else if (race && race.Mode == GameMode.Escape)
                 recordText.text = "<size=27>Lose the police or survive 90 s.</size>\nCREDITS   <b>" + Garage.Credits.ToString("N0") + "</b>";
             else
                 recordText.text = $"BEST LAP   <b>{UIKit.FormatLap(best)}</b>\nBEST FINISH   <b>{(finish > 0 ? UIKit.Ordinal(finish) : "-")}</b>     CREDITS   <b>{Garage.Credits:N0}</b>";
-            if (race) cardTitle.text = race.Mode == GameMode.Race ? "RECORDS" : race.Mode.ToString().ToUpper();
+            if (race) cardTitle.text = race.Mode == GameMode.Race ? "RECORDS" : ModeName(race.Mode);
             if (page == Page.Garage) RefreshGarage();
+            if (page == Page.Tuning) RefreshTuning();
             if (race)
             {
                 string time = race.theme && race.theme.Current == RaceTheme.Night ? "NIGHT" : "DAY";
-                string what = (race.Mode == GameMode.Race ? $"{race.laps} LAPS" : race.Mode.ToString().ToUpper()) + "  ·  " + race.RouteName;
+                string what = race.Mode == GameMode.Race ? $"{race.laps} LAPS  ·  {race.RouteName}" : race.Mode == GameMode.FreeRoam ? "FREE ROAM" : ModeName(race.Mode) + "  ·  " + race.RouteName;
                 settingsText.text = $"{what}  ·  {time}  ·  AI {race.difficulty.ToString().ToUpper()}";
             }
         }

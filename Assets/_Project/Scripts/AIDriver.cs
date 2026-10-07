@@ -12,15 +12,23 @@ namespace Racing
         const float PadSpeed = 11f;
         [System.NonSerialized] public float speedScale = 1f;
         [System.NonSerialized] public float difficulty = 1f;
+        [System.NonSerialized] public bool nitroAllowed = true;
 
         CarController car;
         Racer racer;
+        Nitro nitro;
         float laneOffset, laneTarget, laneTimer, trafficCap = float.MaxValue;
 
         void Awake()
         {
             car = GetComponent<CarController>();
             racer = GetComponent<Racer>();
+            nitro = GetComponent<Nitro>();
+        }
+
+        void OnDisable()
+        {
+            if (nitro) nitro.Request = false;
         }
 
         void FixedUpdate()
@@ -69,6 +77,9 @@ namespace Racing
 
             car.Throttle = throttle;
             car.Handbrake = false;
+            // Nitro on a clear straight.
+            if (nitro) nitro.Request = nitroAllowed && speed > 18f && targetSpeed >= top * 0.99f && Mathf.Abs(angle) < 5f && !car.OffRoad
+                && (nitro.Active || nitro.Amount > 0.35f);
         }
 
         void UpdateLane(RaceManager rm, TrackPath track, float dt)

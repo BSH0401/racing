@@ -117,8 +117,16 @@ namespace Racing
             Vector3 look = tr.position + dir * ahead + Vector3.up * 0.9f;
             transform.rotation = Quaternion.LookRotation(look - transform.position);
 
-            cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, 60f + Mathf.Clamp01(speed / 55f) * 14f, snap ? 1f : t);
+            // Nitro: wider view and a light shake.
+            if (nitroOf != target) { nitroOf = target; nitro = target.GetComponent<Nitro>(); }
+            boostView = Mathf.MoveTowards(boostView, nitro && nitro.Active ? 1f : 0f, Time.deltaTime * (nitro && nitro.Active ? 3f : 1.5f));
+            if (boostView > 0f && !snap) transform.position += Random.insideUnitSphere * 0.035f * boostView;
+            cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, 60f + Mathf.Clamp01(speed / 55f) * 14f + boostView * 12f, snap ? 1f : t);
         }
+
+        Rigidbody nitroOf;
+        Nitro nitro;
+        float boostView;
 
         void Cinematic()
         {

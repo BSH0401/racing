@@ -57,6 +57,11 @@ namespace Racing
         public float handbrakeForce = 9f;
         public float downforce = 4f;
 
+        [Header("Nitro")]
+        public float boostAccel = 7f;
+        [Tooltip("Top speed while boosting, relative to maxSpeed.")]
+        public float boostTopSpeed = 1.18f;
+
         [Header("Body (visual only)")]
         public Transform bodyVisual;
         public float rollPerG = 4.5f;
@@ -66,6 +71,12 @@ namespace Racing
         [System.NonSerialized] public float Steer;
         [System.NonSerialized] public bool Handbrake;
         [System.NonSerialized] public bool InputLocked;
+        // Set by Nitro while the boost burns.
+        [System.NonSerialized] public bool Boosting;
+        // Engine health from CarDamage (1 = intact, ~0.6 = wrecked): scales power and top speed.
+        [System.NonSerialized] public float enginePower = 1f;
+        // Tuning extras read by Nitro and CarDamage.
+        [System.NonSerialized] public float nitroCapacity = 1f, damageTaken = 1f;
 
         public float ForwardSpeed => Vector3.Dot(rb.linearVelocity, transform.forward);
         public float SpeedKmh => rb.linearVelocity.magnitude * 3.6f;
@@ -87,11 +98,15 @@ namespace Racing
         int groundMask;
         Vector3 lastVelocity, smoothedAccel;
 
-        public void ApplySpec(CarSpec spec)
+        // Car model figures, plus the garage tuning upgrades when 'tuned' (the player's car).
+        public void ApplySpec(CarSpec spec, bool tuned = false)
         {
-            maxSpeed = spec.maxSpeed;
-            acceleration = spec.acceleration;
-            tireGrip = spec.tireGrip;
+            float Mul(TunePart p) => tuned ? Tuning.Mul(spec.id, p) : 1f;
+            maxSpeed = spec.maxSpeed * Mul(TunePart.Gearbox);
+            acceleration = spec.acceleration * Mul(TunePart.Engine);
+            tireGrip = spec.tireGrip * Mul(TunePart.Tyres);
+            nitroCapacity = Mul(TunePart.Nitro);
+            damageTaken = Mul(TunePart.Armor);
             rearDriveShare = spec.rearDriveShare;
             GetComponent<Rigidbody>().mass = spec.mass;
         }
@@ -147,7 +162,11 @@ namespace Racing
             else if (throttle > 0.01f)
             {
                 if (fwdSpeed < -0.5f) brake = brakeDeceleration * throttle * mass;
-                else drive = acceleration * throttle * Mathf.Clamp01(1f - Mathf.Pow(Mathf.Max(fwdSpeed, 0f) / maxSpeed, 2f)) * mass;
+                else
+                {
+                    float top = maxSpeed * (0.75f + 0.25f * enginePower);
+                    drive = acceleration * enginePower * throttle * Mathf.Clamp01(1f - Mathf.Pow(Mathf.Max(fwdSpeed, 0f) / top, 2f)) * mass;
+                }
             }
             else if (throttle < -0.01f)
             {
@@ -157,6 +176,14 @@ namespace Racing
             else
             {
                 brake = coastDeceleration * mass;
+            }
+
+            // Nitro: a straight shove along the car up to a raised top speed.
+            if (Boosting && GroundedWheels >= 2)
+            {
+                float boostTop = maxSpeed * boostTopSpeed;
+                float push = Mathf.Clamp01(1f - Mathf.Pow(Mathf.Max(fwdSpeed, 0f) / boostTop, 2f));
+                rb.AddForce(transform.forward * boostAccel * push, ForceMode.Acceleration);
             }
 
             float massPerWheel = mass / 4f;

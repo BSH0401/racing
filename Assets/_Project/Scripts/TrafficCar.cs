@@ -198,6 +198,14 @@ namespace Racing
         void OnCollisionEnter(Collision c)
         {
             if (wrecked) return;
+            // The player crashing into traffic is a crime in free roam.
+            bool byPlayer = c.rigidbody && c.rigidbody.TryGetComponent(out Racer racer) && racer.isPlayer;
+            if (byPlayer && ChaseMode.Instance)
+            {
+                float v = c.relativeVelocity.magnitude;
+                if (v >= wreckSpeed) ChaseMode.Instance.Crime(1f, "HIT AND RUN");
+                else if (v > 3f) ChaseMode.Instance.Crime(0.3f, "RECKLESS DRIVING");
+            }
             if (c.rigidbody && c.rigidbody.GetComponent<TrafficCar>() is TrafficCar t && !t.wrecked) return;
             if (c.relativeVelocity.magnitude < wreckSpeed) return;
             // Hard hit: physics takes over, carrying on with the speed it had.

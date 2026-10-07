@@ -17,7 +17,12 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
   - **RACE**: 체크포인트 레이스
   - **PURSUIT (추격)**: 도망치는 용의자 차를 150초 안에 들이받아 손상 게이지를 0으로 만들면 검거. 300m 이상 6초간 벌어지면 놓침. 내 차에 경광등, 용의자 위에 표시 광선
   - **ESCAPE (도주)**: 경찰차(경광등)가 도로망을 따라 추격, 20초마다 지원 경찰 합류(최대 5대). 90초 버티거나 350m 이상 5초간 따돌리면 성공, 경찰에 둘러싸여 멈추면 BUSTED 게이지가 차서 체포
+  - **FREE ROAM (자유 주행)**: 레이스 없이 맵 전체를 자유롭게 달린다. GTA식 수배 레벨(★1~5): 교통 차량 들이받기(사고 내면 ★1), 경찰 들이받기, 소품 부수기, 도심 130km/h 이상 과속이 범죄. 별 하나마다 경찰차 1대가 출동하고 ★3부터 경찰도 니트로 사용. 마지막 목격 지점에서 수색 반경 밖으로 벗어나 시야에서 사라진 채 버티면 따돌림(별당 250 CR), 경찰에 둘러싸여 멈추면 BUSTED(별당 300 CR 벌금, 도심에서 재시작). 아슬아슬하게 지나가기도 크레딧
   - 성공 시 1,500 CR + 남은 시간 보너스, 실패 시 200 CR
+- 니트로: Shift(게임패드 X)로 순간 가속(최고속도 +18%), 화면이 넓어지고 흔들리며 배기구에서 파란 불꽃. 게이지는 천천히 자동 충전되고, 드리프트·점프·교통 차량을 1.5m 이내로 스쳐 지나가기(NEAR MISS, 연속 시 콤보)로 빨리 찬다. AI 레이서도 직선에서 사용
+- 차량 파손: 세게 부딪히면 부딪힌 자리의 차체가 실제로 찌그러지고, 손상이 쌓이면 엔진 출력·최고속도가 떨어지며 보닛에서 회색→검은 연기. 레이스마다 수리됨 (HUD의 CAR 게이지)
+- 부서지는 소품: 도심의 소화전·쓰레기통·콘크리트 방호벽을 들이받으면 날아간다(차는 무게만큼 감속). 소화전이 부서지면 물기둥이 솟는다. 레이스마다 원위치
+- 튜닝(GARAGE → TUNING): 선택한 차의 엔진(가속)·기어(최고속도)·타이어(그립)·니트로(용량)·장갑(받는 손상 감소)을 크레딧으로 3단계까지 업그레이드 (차마다 저장)
 - 차고(GARAGE): 차량 15종의 스펙(최고속도·가속·그립·무게·구동)을 보고 선택. 레이스 순위에 따라 크레딧(CR)을 받아 잠긴 차를 구매·해금 (저장됨)
   | 차량 | 가격 | 특징 |
   |---|---|---|
@@ -54,6 +59,7 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 | 가속 / 브레이크·후진 | W·↑ / S·↓ | RT / LT |
 | 조향 | A D · ← → | 왼쪽 스틱 |
 | 핸드브레이크 | Space | A |
+| 니트로 | Shift | X |
 | 차량 리셋 | R | Y |
 | 시점 회전 (손 떼면 자동 복귀) | 마우스 | 오른쪽 스틱 |
 | 카메라 전환 | C | RB |
@@ -69,10 +75,10 @@ Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 3. 메뉴 **Racing → Setup Scene**: 씬·머티리얼을 코드(`Assets/_Project/Editor/RacingSetup.cs`)로 다시 생성.
 4. 메뉴 **Racing → Build Windows**: `Builds/Windows/Racing.exe` 생성.
 
-도시 지형·도로 격자는 `CityLayout`, 시골 지형·고속도로·국도·경찰 길찾기 그래프는 `WorldLayout`, 레이스 경로는 `RacingSetup.RouteIntersections`/`GrandRoute()`로 정해지며, 모든 메쉬는 `TrackBuilder`(+`TrackBuilder.World.cs`)가 실행 시 생성한다. 나무 모양은 `TreeMeshes`, 숲 그리기는 `ForestRenderer`, 교통은 `TrafficSystem`/`TrafficCar`, 시골 지면 셰이더는 `Shaders/TerrainBlend.shader`. 나뭇잎 카드 텍스처는 `Tools/foliage_cards.py`로 만든다.
+도시 지형·도로 격자는 `CityLayout`, 시골 지형·고속도로·국도·경찰 길찾기 그래프는 `WorldLayout`, 레이스 경로는 `RacingSetup.RouteIntersections`/`GrandRoute()`로 정해지며, 모든 메쉬는 `TrackBuilder`(+`TrackBuilder.World.cs`)가 실행 시 생성한다. 나무 모양은 `TreeMeshes`, 숲 그리기는 `ForestRenderer`, 교통은 `TrafficSystem`/`TrafficCar`, 니트로 `Nitro`, 파손 `CarDamage`, 부서지는 소품 `Breakable`, 튜닝 `Tuning`(Garage.cs), 자유 주행·수배 `ChaseMode.FreeRoam.cs`, 시골 지면 셰이더는 `Shaders/TerrainBlend.shader`. 나뭇잎 카드 텍스처는 `Tools/foliage_cards.py`로 만든다.
 
 ## 개발용 실행 옵션
-`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-showcase <폴더>` (차량별 측면·전면·후면 스크린샷 후 종료, `-showall`이면 차고 15종 전부), `-mode race|pursuit|escape`, `-logchase`, `-car <id>` (플레이어 차 강제), `-garage N` (차고 화면 N번 차로 열기), `-credits N`, `-lookyaw N` (자유 시점 각도 고정), `-logrespawns` (리스폰 위치·주변 충돌체 출력), `-validateworld` (지형이 도로·교량 상판을 뚫는지 검사), `-views <폴더>` (인터체인지·고가교·숲 등 고정 시점 스크린샷 후 종료, `-viewonly <이름 일부>`, `-viewat x,y,z`), `-notraffic`, `-noforest`, `-forestnear N -forestfar N`, `-route city|grand`, `-logpos N`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
+`-handlingtest` (평지에서 핸들링 측정 후 로그 출력·종료), `-showcase <폴더>` (차량별 측면·전면·후면 스크린샷 후 종료, `-showall`이면 차고 15종 전부), `-mode race|pursuit|escape|freeroam`, `-wanted N` (자유 주행을 수배 ★N으로 시작), `-logchase`, `-batter` (출발 시 플레이어 차를 찌그러뜨림), `-smash R` (출발 시 반경 R m 안의 소품을 넘어뜨림), `-tuning` (`-garage`와 함께: 튜닝 화면 열기), `-nonitro`, `-nodamage`, `-noprops`, `-car <id>` (플레이어 차 강제), `-garage N` (차고 화면 N번 차로 열기), `-credits N`, `-lookyaw N` (자유 시점 각도 고정), `-logrespawns` (리스폰 위치·주변 충돌체 출력), `-validateworld` (지형이 도로·교량 상판을 뚫는지 검사), `-views <폴더>` (인터체인지·고가교·숲 등 고정 시점 스크린샷 후 종료, `-viewonly <이름 일부>`, `-viewat x,y,z`), `-notraffic`, `-noforest`, `-forestnear N -forestfar N`, `-route city|grand`, `-logpos N`, `-autostart -menustart N -autopilot -day -night -laps N -timescale N -shots <폴더> -shottimes 5,20 -quitafter 60`
 
 ## 크레딧
 - 차량 모델 (CC BY 4.0, 크기·방향·바퀴 분리 등 게임용으로 변환, 텍스처 축소):

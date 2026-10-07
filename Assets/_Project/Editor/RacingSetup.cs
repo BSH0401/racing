@@ -186,6 +186,8 @@ namespace Racing.EditorTools
             var hydrantMat = PropMat("Prop_FireHydrant", "fire_hydrant", 0.45f, 0.3f);
             var trashMat = PropMat("Prop_TrashCan", "metal_trash_can", 0.5f, 0.6f);
             var barrierMat = PropMat("Prop_RoadBarrier", "concrete_road_barrier", 0.2f, 0f);
+            softParticle = ParticleMat("SoftParticle", SoftDot());
+            nitroFlame = AdditiveMat("NitroFlame", new Color(0.55f, 0.8f, 3.2f));
 
             var dayCube = Hdri("kloofendal_48d_partly_cloudy_puresky_2k.hdr");
             var nightCube = Hdri("rogland_clear_night_2k.hdr");
@@ -286,6 +288,8 @@ namespace Racing.EditorTools
             builder.hydrantMaterial = hydrantMat;
             builder.trashCanMaterial = trashMat;
             builder.roadBarrierMaterial = barrierMat;
+            builder.particleMaterial = softParticle;
+            builder.propHitClip = Clip("crash.wav");
             builder.lampPole = lampPole;
             builder.lampHead = lampHead;
             builder.cityLayer = CityLayer;
@@ -563,6 +567,8 @@ namespace Racing.EditorTools
             go.AddComponent<ChaseDriver>().enabled = false;
             go.AddComponent<SirenLights>();
             go.AddComponent<CarImpacts>();
+            go.AddComponent<Nitro>().flameMaterial = nitroFlame;
+            go.AddComponent<CarDamage>().smokeMaterial = softParticle;
             go.AddComponent<AudioSource>();
             var audio = go.AddComponent<CarAudio>();
             audio.listenerCar = player;
@@ -1016,6 +1022,69 @@ namespace Racing.EditorTools
             m.SetOverrideTag("RenderType", "TransparentCutout");
             m.renderQueue = (int)RenderQueue.AlphaTest;
             m.enableInstancing = true;
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        static Material softParticle, nitroFlame;
+
+        // Round soft-edged white dot (smoke and spray particles).
+        static Texture2D SoftDot()
+        {
+            string p = $"{TexDir}/SoftDot.png";
+            if (!File.Exists(p))
+            {
+                const int size = 64;
+                var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = (x + 0.5f) / size * 2f - 1f, dy = (y + 0.5f) / size * 2f - 1f;
+                    float a = Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy));
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a * a * (3f - 2f * a)));
+                }
+                File.WriteAllBytes(p, tex.EncodeToPNG());
+                Object.DestroyImmediate(tex);
+                AssetDatabase.ImportAsset(p);
+                var imp = (TextureImporter)AssetImporter.GetAtPath(p);
+                imp.alphaIsTransparency = true;
+                imp.wrapMode = TextureWrapMode.Clamp;
+                imp.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(p);
+        }
+
+        // Alpha-blended particle material (URP Particles/Unlit, tinted by the particle colour).
+        static Material ParticleMat(string name, Texture2D tex)
+        {
+            var m = GetOrCreate(name, "Universal Render Pipeline/Particles/Unlit");
+            m.SetTexture("_BaseMap", tex);
+            m.SetColor("_BaseColor", Color.white);
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", 0f);
+            m.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            m.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            m.SetFloat("_ZWrite", 0f);
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.renderQueue = (int)RenderQueue.Transparent;
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        // Additive unlit glow (nitro flames); HDR colour so bloom picks it up.
+        static Material AdditiveMat(string name, Color color)
+        {
+            var m = GetOrCreate(name, "Universal Render Pipeline/Unlit");
+            m.SetColor("_BaseColor", color);
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", 2f);
+            m.SetFloat("_SrcBlend", (float)BlendMode.One);
+            m.SetFloat("_DstBlend", (float)BlendMode.One);
+            m.SetFloat("_ZWrite", 0f);
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.renderQueue = (int)RenderQueue.Transparent;
             EditorUtility.SetDirty(m);
             return m;
         }

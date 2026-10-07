@@ -11,10 +11,12 @@ namespace Racing
     {
         [System.NonSerialized] public Racer target;
         [System.NonSerialized] public float speedScale = 1f;
+        [System.NonSerialized] public bool useNitro;
         public float cornerGrip = 1.3f;
         public float directRange = 45f;
 
         CarController car;
+        Nitro nitro;
         readonly List<Vector3> path = new List<Vector3>();
         int pathPos;
         float replan, stuckTime, reverseTime;
@@ -23,9 +25,15 @@ namespace Racing
 
         void Awake() => car = GetComponent<CarController>();
 
+        void OnDisable()
+        {
+            if (nitro) nitro.Request = false;
+        }
+
         void OnEnable()
         {
             if (!car) car = GetComponent<CarController>();
+            nitro = GetComponent<Nitro>();
             path.Clear();
             replan = 0f;
         }
@@ -107,6 +115,7 @@ namespace Racing
             }
             car.Throttle = throttle;
             car.Handbrake = Mathf.Abs(angle) > 80f && speed > 9f;
+            if (nitro) nitro.Request = useNitro && dist > 50f && Mathf.Abs(angle) < 6f && speed > 15f && targetSpeed >= top * 0.99f;
         }
 
         void Plan(Vector3 from, Vector3 to)
@@ -140,7 +149,7 @@ namespace Racing
             return path[path.Count - 1];
         }
 
-        static bool Visible(Vector3 from, Vector3 to) =>
+        public static bool Visible(Vector3 from, Vector3 to) =>
             !Physics.Linecast(from + Vector3.up * 1.2f, to + Vector3.up * 1.2f, SightMask, QueryTriggerInteraction.Ignore);
 
         static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
