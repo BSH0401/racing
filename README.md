@@ -2,6 +2,10 @@
 
 Unity 6 (6000.3.11f1, URP) 3D 서킷 레이싱 게임 프로토타입.
 
+## 다운로드
+- **[Windows 빌드 v0.12 다운로드 (Racing_v0.12_Windows.zip, 140MB)](https://github.com/BSH0401/racing/releases/download/v0.12/Racing_v0.12_Windows.zip)** — 압축을 풀고 `Racing/Racing.exe` 실행
+- 모든 버전: [Releases](https://github.com/BSH0401/racing/releases)
+
 ## 게임 내용
 - 약 3.8km × 3.8km 오픈 월드: 가운데 언덕 도심(9×9 도로 격자, 블록 96m, 4차선 도로·횡단보도·연석·보도·빌딩·공원·가로등)과 주변 시골 지형(구릉, 숲, 강과 호수)
 - 고속도로: 도심을 둘러싼 약 7.5km 순환 고속도로, 편도 3차로 + 중앙분리대·가드레일·가로등, 경사 제한된 노면 높이(절토·성토 자동 생성)
